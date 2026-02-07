@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebase & Voice Debug Tool</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 900px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #1a1a2e;
+            color: white;
+        }
+
+        .section {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 10px;
+        }
+
+        h2 {
+            color: #f093fb;
+            margin-top: 0;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+
+        button:hover {
+            opacity: 0.8;
+        }
+
+        .result {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            margin-top: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .success {
+            color: #4ade80;
+        }
+
+        .error {
+            color: #f87171;
+        }
+
+        .warning {
+            color: #fbbf24;
+        }
+
+        input,
+        textarea {
+            width: 100%;
+            padding: 10px;
+            border-radius: 5px;
+            border: none;
+            margin: 5px 0;
+            box-sizing: border-box;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🔧 Firebase & Voice Narration Debug Tool</h1>
+
+    <!-- Voice Test Section -->
+    <div class="section">
+        <h2>🎙️ Voice Narration Test</h2>
+        <p>This tests if your browser supports text-to-speech (Web Speech API)</p>
+
+        <input type="text" id="voiceText" value="Hello! This is a test. My name is Sara."
+            placeholder="Enter text to speak">
+        <button onclick="testVoice()">🔊 Test Voice</button>
+        <button onclick="listVoices()">📋 List Available Voices</button>
+        <button onclick="stopVoice()">⏹️ Stop</button>
+
+        <div id="voiceResult" class="result" style="display:none;"></div>
+    </div>
+
+    <!-- Firebase Connection Test -->
+    <div class="section">
+        <h2>🔥 Firebase Connection Test</h2>
+        <p>Check your Firebase credentials from .env file:</p>
+
+        <div class="result">
+            API Key: ${import.meta.env.VITE_FIREBASE_API_KEY ? '✅ Found' : '❌ Missing'}
+            Auth Domain: ${import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ? '✅ Found' : '❌ Missing'}
+            Project ID: ${import.meta.env.VITE_FIREBASE_PROJECT_ID ? '✅ Found' : '❌ Missing'}
+        </div>
+
+        <button
+            onclick="window.open('https://console.firebase.google.com/project/' + '${import.meta.env.VITE_FIREBASE_PROJECT_ID || 'YOUR_PROJECT'}', '_blank')">
+            🌐 Open Firebase Console
+        </button>
+    </div>
+
+    <!-- Browser Check -->
+    <div class="section">
+        <h2>🌐 Browser Capabilities</h2>
+        <div id="browserCheck" class="result"></div>
+        <button onclick="checkBrowser()">🔍 Check Browser</button>
+    </div>
+
+    <!-- Quick Story Test -->
+    <div class="section">
+        <h2>📖 Quick Story Narration Test</h2>
+        <p>Test the full personalization + narration flow:</p>
+
+        <label>Child's Name:</label>
+        <input type="text" id="childName" value="Sara" placeholder="Enter child name">
+
+        <label>Story (use {HERO} for child's name):</label>
+        <textarea id="storyContent"
+            rows="4">Once upon a time, {HERO} found a magic wand. {HERO} waved it and magical stars appeared!</textarea>
+
+        <button onclick="testStoryNarration()">▶️ Narrate Story</button>
+        <button onclick="stopVoice()">⏹️ Stop</button>
+
+        <div id="storyResult" class="result" style="display:none;"></div>
+    </div>
+
+    <script>
+        let synth = window.speechSynthesis;
+        let currentUtterance = null;
+
+        // Test voice functionality
+        function testVoice() {
+            const text = document.getElementById('voiceText').value;
+            const result = document.getElementById('voiceResult');
+            result.style.display = 'block';
+
+            if (!synth) {
+                result.innerHTML = '<span class="error">❌ ERROR: speechSynthesis not supported in this browser!</span>';
+                return;
+            }
+
+            result.innerHTML = '<span class="warning">🎙️ Attempting to speak...</span>';
+
+            synth.cancel(); // Stop any current speech
+            currentUtterance = new SpeechSynthesisUtterance(text);
+
+            currentUtterance.onstart = () => {
+                result.innerHTML = '<span class="success">✅ Voice narration started!</span>';
+            };
+
+            currentUtterance.onend = () => {
+                result.innerHTML += '\n<span class="success">✅ Voice narration completed!</span>';
+            };
+
+            currentUtterance.onerror = (e) => {
+                result.innerHTML = '<span class="error">❌ ERROR: ' + e.error + '\n' + e.message + '</span>';
+            };
+
+            try {
+                synth.speak(currentUtterance);
+            } catch (e) {
+                result.innerHTML = '<span class="error">❌ ERROR: ' + e.message + '</span>';
+            }
+        }
+
+        // List available voices
+        function listVoices() {
+            const result = document.getElementById('voiceResult');
+            result.style.display = 'block';
+
+            if (!synth) {
+                result.innerHTML = '<span class="error">❌ speechSynthesis not supported!</span>';
+                return;
+            }
+
+            let voices = synth.getVoices();
+
+            if (voices.length === 0) {
+                result.innerHTML = '<span class="warning">⏳ Loading voices... Try again in a moment.</span>';
+
+                // Wait for voices to load
+                synth.onvoiceschanged = () => {
+                    voices = synth.getVoices();
+                    displayVoices(voices, result);
+                };
+            } else {
+                displayVoices(voices, result);
+            }
+        }
+
+        function displayVoices(voices, resultDiv) {
+            let html = '<span class="success">✅ Found ' + voices.length + ' voices:\n\n</span>';
+
+            voices.forEach((voice, i) => {
+                const isDefault = voice.default ? ' (DEFAULT)' : '';
+                html += `${i + 1}. ${voice.name} [${voice.lang}]${isDefault}\n`;
+            });
+
+            resultDiv.innerHTML = html;
+        }
+
+        // Stop voice
+        function stopVoice() {
+            if (synth) {
+                synth.cancel();
+            }
+        }
+
+        // Test story narration with personalization
+        function testStoryNarration() {
+            const childName = document.getElementById('childName').value.trim();
+            const storyTemplate = document.getElementById('storyContent').value;
+            const result = document.getElementById('storyResult');
+            result.style.display = 'block';
+
+            if (!childName) {
+                result.innerHTML = '<span class="error">❌ Please enter a child name!</span>';
+                return;
+            }
+
+            // Replace {HERO} with child's name
+            const personalizedStory = storyTemplate.replace(/{HERO}/g, childName);
+
+            result.innerHTML = '<span class="success">📝 Personalized Story:\n' + personalizedStory + '\n\n</span>';
+            result.innerHTML += '<span class="warning">🎙️ Starting narration...</span>';
+
+            synth.cancel();
+            currentUtterance = new SpeechSynthesisUtterance(personalizedStory);
+            currentUtterance.rate = 0.85; // Slower, calm pace
+
+            currentUtterance.onstart = () => {
+                result.innerHTML += '\n<span class="success">✅ Narration started!</span>';
+            };
+
+            currentUtterance.onend = () => {
+                result.innerHTML += '\n<span class="success">✅ Narration complete!</span>';
+            };
+
+            currentUtterance.onerror = (e) => {
+                result.innerHTML += '\n<span class="error">❌ ERROR: ' + e.error + '</span>';
+            };
+
+            synth.speak(currentUtterance);
+        }
+
+        // Check browser capabilities
+        function checkBrowser() {
+            const result = document.getElementById('browserCheck');
+            let html = '';
+
+            // Check Speech Synthesis
+            html += 'Speech Synthesis API: ';
+            if (window.speechSynthesis) {
+                html += '<span class="success">✅ Supported</span>\n';
+            } else {
+                html += '<span class="error">❌ Not Supported</span>\n';
+            }
+
+            // Check getUserMedia (for microphone, not needed but good to know)
+            html += 'Media Devices API: ';
+            if (navigator.mediaDevices) {
+                html += '<span class="success">✅ Supported</span>\n';
+            } else {
+                html += '<span class="warning">⚠️ Not Supported</span>\n';
+            }
+
+            // Browser info
+            html += '\nBrowser: ' + navigator.userAgent + '\n';
+            html += 'Language: ' + navigator.language + '\n';
+            html += 'Online: ' + (navigator.onLine ? '✅ Yes' : '❌ No') + '\n';
+
+            result.innerHTML = html;
+        }
+
+        // Auto-check on load
+        window.addEventListener('load', () => {
+            checkBrowser();
+
+            // Try to load voices
+            if (synth) {
+                synth.getVoices();
+                synth.onvoiceschanged = () => {
+                    console.log('Voices loaded:', synth.getVoices().length);
+                };
+            }
+        });
+    </script>
+</body>
+
+</html>

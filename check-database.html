@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebase Data Checker</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            max-width: 1000px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #1a1a2e;
+            color: #00ff00;
+        }
+
+        h1 {
+            color: #f093fb;
+        }
+
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+
+        button:hover {
+            opacity: 0.8;
+        }
+
+        #output {
+            background: #000;
+            padding: 20px;
+            border-radius: 5px;
+            margin-top: 20px;
+            min-height: 300px;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+
+        .error {
+            color: #ff6b6b;
+        }
+
+        .success {
+            color: #51cf66;
+        }
+
+        .warning {
+            color: #ffd43b;
+        }
+
+        .info {
+            color: #74c0fc;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🔍 Firebase Database Inspector</h1>
+    <p>This tool will check what's actually in your Firebase database</p>
+
+    <button onclick="checkDatabase()">🔍 Check Database</button>
+    <button onclick="clearOutput()">🗑️ Clear</button>
+
+    <div id="output"></div>
+
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getFirestore, collection, getDocs } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+        // Firebase config from your .env
+        const firebaseConfig = {
+            apiKey: "AIzaSyBO4yi-nUqfRhdFDkXvnzrMJndbM3Vgccs",
+            authDomain: "story-for-kids-1e94b.firebaseapp.com",
+            projectId: "story-for-kids-1e94b",
+            storageBucket: "story-for-kids-1e94b.appspot.com",
+            messagingSenderId: "333349403946",
+            appId: "1:333349403946:web:a455c894d08ddac24c3253"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        window.checkDatabase = async function () {
+            const output = document.getElementById('output');
+            output.innerHTML = '<span class="info">🔍 Checking Firebase Database...\n\n</span>';
+
+            try {
+                // Check Subjects
+                output.innerHTML += '<span class="info">📁 SUBJECTS COLLECTION:\n</span>';
+                const subjectsSnapshot = await getDocs(collection(db, 'subjects'));
+                output.innerHTML += `<span class="success">Found ${subjectsSnapshot.size} subject(s)\n\n</span>`;
+
+                const subjectIds = [];
+                if (subjectsSnapshot.size === 0) {
+                    output.innerHTML += '<span class="error">❌ NO SUBJECTS FOUND! You need to create subjects first.\n\n</span>';
+                } else {
+                    subjectsSnapshot.forEach((doc) => {
+                        const data = doc.data();
+                        subjectIds.push(doc.id);
+                        output.innerHTML += `<span class="success">✅ ${data.icon || '📖'} ${data.name}</span>\n`;
+                        output.innerHTML += `   ID: <span class="warning">${doc.id}</span>\n`;
+                        output.innerHTML += `   Description: ${data.description || 'N/A'}\n`;
+                        output.innerHTML += `   Order: ${data.order || 'N/A'}\n\n`;
+                    });
+                }
+
+                // Check Stories
+                output.innerHTML += '<span class="info">📖 STORIES COLLECTION:\n</span>';
+                const storiesSnapshot = await getDocs(collection(db, 'stories'));
+                output.innerHTML += `<span class="success">Found ${storiesSnapshot.size} story(ies)\n\n</span>`;
+
+                if (storiesSnapshot.size === 0) {
+                    output.innerHTML += '<span class="error">❌ NO STORIES FOUND! You need to create stories.\n\n</span>';
+                } else {
+                    const storyBySubject = {};
+
+                    storiesSnapshot.forEach((doc) => {
+                        const data = doc.data();
+                        const subjectId = data.subjectId;
+
+                        if (!storyBySubject[subjectId]) {
+                            storyBySubject[subjectId] = [];
+                        }
+                        storyBySubject[subjectId].push({ id: doc.id, ...data });
+                    });
+
+                    // Display stories grouped by subject
+                    for (const [subjectId, stories] of Object.entries(storyBySubject)) {
+                        const subjectExists = subjectIds.includes(subjectId);
+
+                        if (!subjectExists) {
+                            output.innerHTML += `<span class="error">⚠️ WARNING: ${stories.length} story(ies) have invalid subjectId: ${subjectId}</span>\n`;
+                            output.innerHTML += `<span class="error">   This subject doesn't exist! Stories won't show up!</span>\n\n`;
+                        } else {
+                            output.innerHTML += `<span class="info">Subject ID: ${subjectId}</span>\n`;
+                        }
+
+                        stories.forEach(story => {
+                            output.innerHTML += `  <span class="success">✅ ${story.title}</span>\n`;
+                            output.innerHTML += `     Story ID: <span class="warning">${story.id}</span>\n`;
+                            output.innerHTML += `     Duration: ${story.duration || 'N/A'}\n`;
+                            output.innerHTML += `     Has {HERO}: ${story.content?.includes('{HERO}') ? '<span class="success">YES ✅</span>' : '<span class="error">NO ❌</span>'}\n`;
+                            output.innerHTML += `     Content preview: ${(story.content || '').substring(0, 100)}...\n\n`;
+                        });
+                    }
+                }
+
+                // Summary
+                output.innerHTML += '\n<span class="info">═══════════════════════════════════\n';
+                output.innerHTML += '📊 SUMMARY:\n';
+                output.innerHTML += '═══════════════════════════════════</span>\n';
+                output.innerHTML += `Subjects: <span class="${subjectsSnapshot.size > 0 ? 'success' : 'error'}">${subjectsSnapshot.size}</span>\n`;
+                output.innerHTML += `Stories: <span class="${storiesSnapshot.size > 0 ? 'success' : 'error'}">${storiesSnapshot.size}</span>\n\n`;
+
+                if (subjectsSnapshot.size === 0) {
+                    output.innerHTML += '<span class="error">⚠️ You need to create subjects first via admin panel!</span>\n';
+                } else if (storiesSnapshot.size === 0) {
+                    output.innerHTML += '<span class="error">⚠️ You need to create stories via admin panel!</span>\n';
+                } else {
+                    output.innerHTML += '<span class="success">✅ Database looks good! Stories should be showing up.</span>\n';
+                }
+
+            } catch (error) {
+                output.innerHTML += `\n<span class="error">❌ ERROR: ${error.message}\n`;
+                output.innerHTML += `\nError details: ${error.code || 'Unknown'}\n`;
+                output.innerHTML += `\nMake sure:\n`;
+                output.innerHTML += `1. Firebase credentials are correct in .env\n`;
+                output.innerHTML += `2. Firestore security rules allow reading\n`;
+                output.innerHTML += `3. You're connected to the internet</span>\n`;
+                console.error('Full error:', error);
+            }
+        };
+
+        window.clearOutput = function () {
+            document.getElementById('output').innerHTML = '';
+        };
+    </script>
+</body>
+
+</html>

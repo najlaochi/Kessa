@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Story Narration Test</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+
+        input,
+        select,
+        textarea {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+
+        textarea {
+            min-height: 150px;
+            font-family: inherit;
+        }
+
+        button {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 18px;
+            width: 100%;
+            margin-top: 10px;
+            font-weight: bold;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #f093fb 0%, #f5576c 100%);
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        .status {
+            text-align: center;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .preview {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            max-height: 200px;
+            overflow-y: auto;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🌟 Story Narration Test 🌟</h1>
+
+        <div class="form-group">
+            <label for="childName">Child's Name:</label>
+            <input type="text" id="childName" placeholder="Enter child's name..." value="Sara">
+        </div>
+
+        <div class="form-group">
+            <label for="language">Language:</label>
+            <select id="language">
+                <option value="en">English</option>
+                <option value="ar">Arabic (عربي)</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="speed">Narration Speed:</label>
+            <input type="range" id="speed" min="0.5" max="1.5" step="0.1" value="0.85">
+            <span id="speedValue">0.85x</span>
+        </div>
+
+        <div class="form-group">
+            <label for="storyText">Story Text (use {HERO} for child's name):</label>
+            <textarea id="storyText">Once upon a time, there was a brave explorer named {HERO}. 
+{HERO} loved the ocean more than anything in the world. One sunny morning, {HERO} discovered a beautiful shell on the beach. When {HERO} picked it up, something magical happened!
+
+The shell began to glow with a soft blue light. A friendly dolphin named Splash appeared from the waves. "Hello, {HERO}!" said Splash. "I've been waiting for someone special like you."
+
+Splash invited {HERO} on an underwater adventure. Together, they swam past colorful coral reefs, played with sea turtles, and discovered a hidden underwater palace.
+
+As the sun began to set, Splash brought {HERO} back to the beach. "{HERO}, you are always welcome in our ocean home," said Splash with a smile.
+
+Good night, {HERO}. Sweet dreams! 🌙</textarea>
+        </div>
+
+        <div id="preview" class="preview" style="display:none;">
+            <strong>Personalized Story Preview:</strong>
+            <div id="previewText"></div>
+        </div>
+
+        <div class="progress-bar" id="progressBar" style="display:none;">
+            <div class="progress-fill" id="progressFill"></div>
+        </div>
+
+        <div id="status" class="status" style="display:none;"></div>
+
+        <button id="playBtn" onclick="playStory()">▶️ Play Story</button>
+        <button id="pauseBtn" onclick="pauseStory()" style="display:none;">⏸️ Pause</button>
+        <button id="resumeBtn" onclick="resumeStory()" style="display:none;">▶️ Resume</button>
+        <button id="stopBtn" onclick="stopStory()" style="display:none;">⏹️ Stop</button>
+    </div>
+
+    <script>
+        let synth = window.speechSynthesis;
+        let utterance = null;
+        let isPaused = false;
+
+        // Update speed display
+        document.getElementById('speed').addEventListener('input', (e) => {
+            document.getElementById('speedValue').textContent = e.target.value + 'x';
+        });
+
+        // Update preview when name or story changes
+        document.getElementById('childName').addEventListener('input', updatePreview);
+        document.getElementById('storyText').addEventListener('input', updatePreview);
+
+        function updatePreview() {
+            const name = document.getElementById('childName').value.trim() || 'HERO';
+            const story = document.getElementById('storyText').value;
+            const personalized = story.replace(/{HERO}/g, name).replace(/{بطل}/g, name);
+
+            document.getElementById('previewText').textContent = personalized;
+            document.getElementById('preview').style.display = 'block';
+        }
+
+        async function getVoice(lang) {
+            return new Promise((resolve) => {
+                let voices = synth.getVoices();
+
+                if (voices.length > 0) {
+                    resolve(selectVoice(voices, lang));
+                } else {
+                    synth.onvoiceschanged = () => {
+                        voices = synth.getVoices();
+                        resolve(selectVoice(voices, lang));
+                    };
+                }
+            });
+        }
+
+        function selectVoice(voices, lang) {
+            if (lang === 'ar') {
+                const arabicVoices = voices.filter(v =>
+                    v.lang.startsWith('ar') || v.name.toLowerCase().includes('arabic')
+                );
+                if (arabicVoices.length > 0) return arabicVoices[0];
+            }
+
+            const femaleVoices = voices.filter(v =>
+                v.lang.startsWith(lang) && (
+                    v.name.toLowerCase().includes('female') ||
+                    v.name.toLowerCase().includes('woman') ||
+                    v.name.toLowerCase().includes('samantha') ||
+                    v.name.toLowerCase().includes('zira')
+                )
+            );
+
+            if (femaleVoices.length > 0) return femaleVoices[0];
+
+            const langVoices = voices.filter(v => v.lang.startsWith(lang));
+            return langVoices[0] || voices[0];
+        }
+
+        async function playStory() {
+            const childName = document.getElementById('childName').value.trim();
+            if (!childName) {
+                alert('Please enter a child name!');
+                return;
+            }
+
+            updatePreview();
+
+            const storyText = document.getElementById('storyText').value;
+            const personalizedStory = storyText.replace(/{HERO}/g, childName).replace(/{بطل}/g, childName);
+            const speed = parseFloat(document.getElementById('speed').value);
+            const lang = document.getElementById('language').value;
+
+            // Stop any current narration
+            synth.cancel();
+
+            // Create utterance
+            utterance = new SpeechSynthesisUtterance(personalizedStory);
+            utterance.rate = speed;
+            utterance.pitch = 1.0;
+            utterance.volume = 1.0;
+
+            // Get appropriate voice
+            const voice = await getVoice(lang);
+            if (voice) {
+                utterance.voice = voice;
+            }
+
+            // Set up callbacks
+            utterance.onstart = () => {
+                document.getElementById('playBtn').style.display = 'none';
+                document.getElementById('pauseBtn').style.display = 'inline-block';
+                document.getElementById('stopBtn').style.display = 'inline-block';
+                document.getElementById('progressBar').style.display = 'block';
+                document.getElementById('status').style.display = 'block';
+                document.getElementById('status').textContent = '🎙️ Narrating story...';
+            };
+
+            utterance.onend = () => {
+                resetButtons();
+                document.getElementById('status').textContent = '✅ Story complete!';
+                document.getElementById('progressFill').style.width = '100%';
+            };
+
+            utterance.onerror = (error) => {
+                console.error('Speech error:', error);
+                resetButtons();
+                document.getElementById('status').textContent = '❌ Error: ' + error.error;
+            };
+
+            utterance.onboundary = (event) => {
+                const progress = (event.charIndex / personalizedStory.length) * 100;
+                document.getElementById('progressFill').style.width = progress + '%';
+            };
+
+            // Start narration
+            synth.speak(utterance);
+        }
+
+        function pauseStory() {
+            synth.pause();
+            isPaused = true;
+            document.getElementById('pauseBtn').style.display = 'none';
+            document.getElementById('resumeBtn').style.display = 'inline-block';
+            document.getElementById('status').textContent = '⏸️ Paused';
+        }
+
+        function resumeStory() {
+            synth.resume();
+            isPaused = false;
+            document.getElementById('resumeBtn').style.display = 'none';
+            document.getElementById('pauseBtn').style.display = 'inline-block';
+            document.getElementById('status').textContent = '🎙️ Narrating story...';
+        }
+
+        function stopStory() {
+            synth.cancel();
+            resetButtons();
+            document.getElementById('status').textContent = '⏹️ Stopped';
+            document.getElementById('progressFill').style.width = '0%';
+        }
+
+        function resetButtons() {
+            document.getElementById('playBtn').style.display = 'inline-block';
+            document.getElementById('pauseBtn').style.display = 'none';
+            document.getElementById('resumeBtn').style.display = 'none';
+            document.getElementById('stopBtn').style.display = 'none';
+        }
+
+        // Initialize preview
+        updatePreview();
+    </script>
+</body>
+
+</html>

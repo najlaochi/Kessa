@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Firebase Query</title>
+    <style>
+        body {
+            font-family: monospace;
+            max-width: 1000px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #1a1a2e;
+            color: #0f0;
+        }
+
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px 5px;
+            font-size: 16px;
+        }
+
+        #output {
+            background: #000;
+            padding: 20px;
+            border-radius: 5px;
+            margin-top: 20px;
+            white-space: pre-wrap;
+        }
+
+        .error {
+            color: #ff6b6b;
+        }
+
+        .success {
+            color: #51cf66;
+        }
+
+        .info {
+            color: #74c0fc;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🔍 Test Firebase Query for Stories</h1>
+    <p>Subject ID: <strong>tvPoDha8I7MNTuNCf6yC</strong></p>
+
+    <button onclick="testQuery()">Test getStoriesBySubject Query</button>
+    <button onclick="testWithOrderBy()">Test With OrderBy</button>
+    <button onclick="testWithoutOrderBy()">Test Without OrderBy</button>
+
+    <div id="output"></div>
+
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getFirestore, collection, getDocs, query, where, orderBy } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBO4yi-nUqfRhdFDkXvnzrMJndbM3Vgccs",
+            authDomain: "story-for-kids-1e94b.firebaseapp.com",
+            projectId: "story-for-kids-1e94b",
+            storageBucket: "story-for-kids-1e94b.appspot.com",
+            messagingSenderId: "333349403946",
+            appId: "1:333349403946:web:a455c894d08ddac24c3253"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const subjectId = 'tvPoDha8I7MNTuNCf6yC';
+
+        window.testQuery = async function () {
+            const output = document.getElementById('output');
+            output.innerHTML = '<span class="info">Testing exact query from storyService.js...\n\n</span>';
+
+            try {
+                // Exact query from your code
+                const q = query(
+                    collection(db, 'stories'),
+                    where('subjectId', '==', subjectId),
+                    orderBy('createdAt', 'desc')
+                );
+
+                output.innerHTML += '<span class="info">Query: collection(stories) + where(subjectId == ' + subjectId + ') + orderBy(createdAt, desc)\n\n</span>';
+
+                const querySnapshot = await getDocs(q);
+                output.innerHTML += `<span class="${querySnapshot.size > 0 ? 'success' : 'error'}">Found ${querySnapshot.size} stories\n\n</span>`;
+
+                querySnapshot.forEach((doc) => {
+                    const data = doc.data();
+                    output.innerHTML += `<span class="success">✅ ${data.title}</span>\n`;
+                    output.innerHTML += `   ID: ${doc.id}\n`;
+                    output.innerHTML += `   subjectId: ${data.subjectId}\n`;
+                    output.innerHTML += `   createdAt: ${data.createdAt?.toDate?.() || 'Missing!'}\n\n`;
+                });
+
+                if (querySnapshot.size === 0) {
+                    output.innerHTML += '<span class="error">❌ NO RESULTS! This might be the problem!\n\n</span>';
+                }
+
+            } catch (error) {
+                output.innerHTML += `<span class="error">❌ ERROR: ${error.message}\n`;
+                output.innerHTML += `Code: ${error.code}\n\n`;
+
+                if (error.code === 'failed-precondition' || error.message.includes('index')) {
+                    output.innerHTML += '<span class="error">⚠️ FIRESTORE INDEX MISSING!\n';
+                    output.innerHTML += 'You need to create a composite index in Firebase Console.\n';
+                    output.innerHTML += 'Firebase should show you a link in the browser console - click it!\n\n</span>';
+                }
+
+                console.error('Full error:', error);
+            }
+        };
+
+        window.testWithoutOrderBy = async function () {
+            const output = document.getElementById('output');
+            output.innerHTML = '<span class="info">Testing WITHOUT orderBy...\n\n</span>';
+
+            try {
+                const q = query(
+                    collection(db, 'stories'),
+                    where('subjectId', '==', subjectId)
+                );
+
+                const querySnapshot = await getDocs(q);
+                output.innerHTML += `<span class="${querySnapshot.size > 0 ? 'success' : 'error'}">Found ${querySnapshot.size} stories\n\n</span>`;
+
+                querySnapshot.forEach((doc) => {
+                    const data = doc.data();
+                    output.innerHTML += `<span class="success">✅ ${data.title}\n</span>`;
+                });
+
+            } catch (error) {
+                output.innerHTML += `<span class="error">❌ ERROR: ${error.message}</span>\n`;
+                console.error(error);
+            }
+        };
+
+        window.testWithOrderBy = async function () {
+            const output = document.getElementById('output');
+            output.innerHTML = '<span class="info">Testing WITH orderBy but checking createdAt field...\n\n</span>';
+
+            try {
+                // First get all stories
+                const allStories = await getDocs(collection(db, 'stories'));
+                output.innerHTML += `<span class="info">All stories in database: ${allStories.size}\n\n</span>`;
+
+                allStories.forEach((doc) => {
+                    const data = doc.data();
+                    if (data.subjectId === subjectId) {
+                        output.innerHTML += `<span class="success">Story: ${data.title}\n</span>`;
+                        output.innerHTML += `  subjectId: ${data.subjectId}\n`;
+                        output.innerHTML += `  createdAt exists: ${data.createdAt ? 'YES ✅' : 'NO ❌'}\n`;
+                        output.innerHTML += `  createdAt value: ${data.createdAt?.toDate?.() || 'MISSING!'}\n\n`;
+                    }
+                });
+
+            } catch (error) {
+                output.innerHTML += `<span class="error">❌ ERROR: ${error.message}</span>\n`;
+                console.error(error);
+            }
+        };
+    </script>
+</body>
+
+</html>
