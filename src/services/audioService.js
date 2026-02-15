@@ -23,22 +23,58 @@ class AudioService {
     }
 
     /**
-     * Get available voices (prefer female voices)
+     * Ensure voices are loaded - critical for mobile browsers
      */
-    getVoices() {
+    async ensureVoicesLoaded() {
         return new Promise((resolve) => {
             let voices = this.synth.getVoices();
 
             if (voices.length > 0) {
+                console.log(`✅ Voices loaded: ${voices.length} available`);
                 resolve(voices);
-            } else {
-                // Wait for voices to load
-                this.synth.onvoiceschanged = () => {
-                    voices = this.synth.getVoices();
-                    resolve(voices);
-                };
+                return;
             }
+
+            console.log('⏳ Waiting for voices to load...');
+
+            // Mobile browsers often load voices asynchronously
+            let attempts = 0;
+            const maxAttempts = 50; // 5 seconds max wait
+
+            const checkVoices = () => {
+                voices = this.synth.getVoices();
+                attempts++;
+
+                if (voices.length > 0) {
+                    console.log(`✅ Voices loaded after ${attempts * 100}ms: ${voices.length} available`);
+                    resolve(voices);
+                } else if (attempts >= maxAttempts) {
+                    console.warn('⚠️ Voice loading timeout - using fallback');
+                    resolve([]);
+                } else {
+                    setTimeout(checkVoices, 100);
+                }
+            };
+
+            // Also listen to the voiceschanged event
+            this.synth.onvoiceschanged = () => {
+                voices = this.synth.getVoices();
+                if (voices.length > 0) {
+                    console.log(`✅ Voices loaded via event: ${voices.length} available`);
+                    resolve(voices);
+                }
+            };
+
+            // Start polling
+            setTimeout(checkVoices, 100);
         });
+    }
+
+    /**
+     * Get available voices (prefer female voices)
+     */
+    async getVoices() {
+        return await this.ensureVoicesLoaded();
     }
 
     /**
@@ -47,6 +83,9 @@ class AudioService {
    */
     async getCalmFemaleVoice(language = 'en') {
         const voices = await this.getVoices();
+
+        console.log(`🔍 Total voices available: ${voices.length}`);
+        console.log('All voices:', voices.map(v => `${v.name} (${v.lang})`).join(', '));
 
         // For Arabic - prioritize warm, natural female voices
         if (language === 'ar') {
@@ -58,26 +97,111 @@ class AudioService {
                 voice.name.toLowerCase().includes('arabic')
             );
 
-            // Prefer female voices for warm, nurturing tone
-            const femaleArabicVoices = arabicVoices.filter(voice =>
-                voice.name.toLowerCase().includes('female') ||
-                (!voice.name.toLowerCase().includes('male'))
-            );
+            console.log(`🔍 Arabic voices found: ${arabicVoices.length}`);
+
+            // Filter OUT male voices, but accept any that aren't explicitly male
+            const nonMaleArabicVoices = arabicVoices.filter(voice => {
+                const nameLower = voice.name.toLowerCase();
+
+                // Explicitly exclude male voices
+                if (nameLower.includes('male') && !nameLower.includes('female')) {
+                    return false;
+                }
+                if (nameLower.includes('man') && !nameLower.includes('woman')) {
+                    return false;
+                }
+                // Known male names to exclude
+                const maleNames = ['majed', 'naayf', 'hamed'];
+                if (maleNames.some(name => nameLower.includes(name))) {
+                    return false;
+                }
+
+                return true; // Accept if not explicitly male
+            });
+
+            console.log(`✅ Non-male Arabic voices: ${nonMaleArabicVoices.length}`);
+
+            // Prioritize explicitly female voices if available
+            const explicitlyFemaleVoices = nonMaleArabicVoices.filter(voice => {
+                const nameLower = voice.name.toLowerCase();
+                return nameLower.includes('female') ||
+                    nameLower.includes('woman') ||
+                    nameLower.includes('نساء') || // Arabic word for women
+                    nameLower.includes('أنثى');   // Arabic word for female
+            });
 
             // Try to find high-quality female voices first
-            for (const provider of arabicPriority) {
-                const priorityVoice = femaleArabicVoices.find(voice =>
-                    voice.name.toLowerCase().includes(provider)
-                );
-                if (priorityVoice) return priorityVoice;
+            if (explicitlyFemaleVoices.length > 0) {
+                for (const provider of arabicPriority) {
+                    const priorityVoice = explicitlyFemaleVoices.find(voice =>
+                        voice.name.toLowerCase().includes(provider)
+                    );
+                    if (priorityVoice) {
+                        console.log(`🎙️ Selected: ${priorityVoice.name} (${priorityVoice.lang})`);
+                        return priorityVoice;
+                    }
+                }
+                console.log(`🎙️ Selected: ${explicitlyFemaleVoices[0].name}`);
+                return explicitlyFemaleVoices[0];
             }
 
-            if (femaleArabicVoices.length > 0) return femaleArabicVoices[0];
-            if (arabicVoices.length > 0) return arabicVoices[0];
+            // Use any non-male Arabic voice
+            if (nonMaleArabicVoices.length > 0) {
+                for (const provider of arabicPriority) {
+                    const priorityVoice = nonMaleArabicVoices.find(voice =>
+                        voice.name.toLowerCase().includes(provider)
+                    );
+                    if (priorityVoice) {
+                        console.log(`🎙️ Selected (non-male): ${priorityVoice.name} (${priorityVoice.lang})`);
+                        return priorityVoice;
+                    }
+                }
+                console.log(`🎙️ Selected (non-male): ${nonMaleArabicVoices[0].name}`);
+                return nonMaleArabicVoices[0];
+            }
+
+            // Last resort - use any Arabic voice
+            if (arabicVoices.length > 0) {
+                console.warn('⚠️ Warning: Using first Arabic voice available');
+                console.log(`🎙️ Selected (fallback): ${arabicVoices[0].name}`);
+                return arabicVoices[0];
+            }
         }
 
-        // For English - prefer warm, natural female voices like a mother
-        // Priority: Google > Microsoft natural voices > Apple > generic
+        // For English - STRICT female voice selection
+        console.log('🔍 Searching for English female voices...');
+
+        const englishVoices = voices.filter(voice => voice.lang.startsWith('en'));
+        console.log(`🔍 English voices found: ${englishVoices.length}`);
+
+        // STRICT female filtering
+        const femalEnglishVoices = englishVoices.filter(voice => {
+            const nameLower = voice.name.toLowerCase();
+
+            // Explicitly exclude male voices
+            if (nameLower.includes('male') && !nameLower.includes('female')) {
+                return false;
+            }
+            if (nameLower.includes('man') && !nameLower.includes('woman')) {
+                return false;
+            }
+            if (nameLower.includes('boy')) {
+                return false;
+            }
+
+            // Known male voice names to exclude
+            const maleNames = ['david', 'george', 'james', 'daniel', 'christopher', 'ricky', 'tom', 'mark'];
+            if (maleNames.some(name => nameLower.includes(name))) {
+                return false;
+            }
+
+            return true; // If not explicitly male, assume it might be female
+        });
+
+        console.log(`✅ Female English voices after filtering: ${femalEnglishVoices.length}`);
+        console.log('Female voices:', femalEnglishVoices.map(v => v.name).join(', '));
+
+        // Priority list of known female voices
         const warmMotherlyVoices = [
             // Google female voices (natural, expressive)
             'google uk english female',
@@ -88,6 +212,7 @@ class AudioService {
             'microsoft aria',
             'microsoft michelle',
             'microsoft helen',
+            'microsoft zira',
 
             // Apple female voices (macOS/iOS) - natural and warm
             'samantha',
@@ -98,6 +223,9 @@ class AudioService {
             'allison',
             'susan',
             'ava',
+            'nicky',
+            'moira',
+            'tessa',
 
             // Generic female markers
             'female',
@@ -106,16 +234,31 @@ class AudioService {
 
         // Try each warm voice in priority order
         for (const voiceName of warmMotherlyVoices) {
-            const voice = voices.find(v =>
-                v.lang.startsWith('en') &&
+            const voice = femalEnglishVoices.find(v =>
                 v.name.toLowerCase().includes(voiceName.toLowerCase())
             );
-            if (voice) return voice;
+            if (voice) {
+                console.log(`🎙️ Selected priority female voice: ${voice.name} (${voice.lang})`);
+                return voice;
+            }
         }
 
-        // Fallback to any English voice
-        const langVoices = voices.filter(voice => voice.lang.startsWith(language));
-        return langVoices[0] || voices[0];
+        // If we have any female English voices, use the first one
+        if (femalEnglishVoices.length > 0) {
+            console.log(`🎙️ Selected first female voice: ${femalEnglishVoices[0].name}`);
+            return femalEnglishVoices[0];
+        }
+
+        // Last resort - if no female-specific voice found, try any English voice
+        console.warn('⚠️ Warning: Could not find explicit female voice!');
+        if (englishVoices.length > 0) {
+            console.warn(`Using: ${englishVoices[0].name} - may not be female`);
+            return englishVoices[0];
+        }
+
+        // Absolute fallback
+        console.error('❌ No voices available for this language!');
+        return voices[0] || null;
     }
 
     /**
@@ -125,6 +268,8 @@ class AudioService {
         // Stop any current narration
         this.stop();
 
+        console.log('🎙️ Starting narration with options:', options);
+
         const {
             rate = 0.8,
             pitch = 1.05,
@@ -132,6 +277,9 @@ class AudioService {
             musicVolume = 0.25,
             language = 'en'
         } = options;
+
+        console.log(`📖 Story length: ${storyText.length} characters`);
+        console.log(`🌍 Language: ${language}`);
 
         // Store for seeking
         this.storyText = storyText;
@@ -146,14 +294,29 @@ class AudioService {
 
             try {
                 await this.backgroundMusic.play();
+                console.log('🎵 Background music started');
             } catch (error) {
-                console.warn('Background music autoplay blocked:', error);
+                console.warn('⚠️ Background music autoplay blocked:', error);
             }
         }
 
         // Parse story into segments and store
         this.segments = this.parseStorySegments(storyText);
+        console.log(`📝 Parsed into ${this.segments.length} segments`);
+
         const voice = await this.getCalmFemaleVoice(language);
+
+        if (!voice) {
+            console.error('❌ No voice found for language:', language);
+            alert(`No ${language} voice available on this device. Please install Text-to-Speech voices in your device settings.`);
+            this.stop();
+            return;
+        }
+
+        console.log(`🗣️ Using voice: ${voice.name} (${voice.lang})`);
+
+        // Store voice for resumeFromSegment to use
+        this.currentVoice = voice;
 
         // Track progress
         let totalChars = storyText.length;
@@ -184,8 +347,8 @@ class AudioService {
                 // Apply dramatic variations based on emotion
                 const emotion = segment.emotion || 'normal';
 
-                // Check if this is Arabic (rate will be ~0.85 for Arabic, 0.7 for English)
-                const isArabic = rate > 0.8;
+                // Check language properly instead of guessing from rate
+                const isArabic = language === 'ar';
 
                 if (isArabic) {
                     // Arabic: Keep speed consistent, vary pitch and volume for expression
@@ -355,15 +518,24 @@ class AudioService {
         const utterance = this.utteranceQueue.shift();
         this.currentUtterance = utterance;
 
+        utterance.onstart = () => {
+            console.log('🎙️ Speech started');
+        };
+
         utterance.onend = () => {
+            console.log('✅ Speech segment complete');
             this.speakQueue();
         };
 
         utterance.onerror = (error) => {
-            console.error('Speech synthesis error:', error);
-            this.stop();
+            console.error('❌ Speech synthesis error:', error);
+            // Try to continue with next segment instead of stopping completely
+            if (error.error !== 'interrupted') {
+                this.speakQueue();
+            }
         };
 
+        console.log('🎤 Speaking:', utterance.text.substring(0, 50) + '...');
         this.synth.speak(utterance);
     }
 
@@ -486,6 +658,138 @@ class AudioService {
                 this.backgroundMusic.play().catch(console.error);
             }
             this.isPaused = false;
+        }
+    }
+
+    /**
+     * Set playback speed
+     * Cancels current speech and resumes from next segment with new speed
+     */
+    setSpeed(speed) {
+        this.currentSpeed = speed;
+        console.log(`⚡ Speed set to ${speed}x`);
+
+        // If currently playing, we need to restart from current segment with new speed
+        if (this.isPlaying && !this.isPaused) {
+            const currentSegment = this.currentSegmentIndex;
+            console.log(`🔄 Applying new speed from segment ${currentSegment + 1}`);
+
+            // Cancel current speech
+            this.synth.cancel();
+
+            // Resume from next segment with new speed
+            this.resumeFromSegment(currentSegment + 1);
+        }
+    }
+
+    /**
+     * Resume narration from a specific segment index
+     */
+    resumeFromSegment(startIndex) {
+        if (!this.segments || startIndex >= this.segments.length) {
+            console.log('✅ Narration complete');
+            this.isPlaying = false;
+            return;
+        }
+
+        console.log(`▶️ Resuming from segment ${startIndex}/${this.segments.length}`);
+
+        // Speak remaining segments
+        for (let i = startIndex; i < this.segments.length; i++) {
+            const segment = this.segments[i];
+            const utterance = new SpeechSynthesisUtterance(segment.text);
+
+            // Apply current settings with current speed
+            utterance.voice = this.currentVoice;
+            utterance.lang = this.currentVoice?.lang || 'en-US';
+
+            const rate = this.currentOptions?.rate || 0.8;
+            const pitch = this.currentOptions?.pitch || 1.0;
+            const volume = this.currentOptions?.volume || 1.0;
+            const language = this.currentOptions?.language || 'en';
+
+            // Apply speed and type settings based on language
+            if (segment.type === 'dialogue') {
+                const emotion = segment.emotion || 'normal';
+                const isArabic = language === 'ar';
+
+                if (isArabic) {
+                    // Arabic: Keep speed consistent, vary pitch and volume
+                    switch (emotion) {
+                        case 'excited':
+                            utterance.rate = rate * this.currentSpeed;
+                            utterance.pitch = pitch + 0.35;
+                            utterance.volume = volume * 1.2;
+                            break;
+                        case 'question':
+                            utterance.rate = rate * this.currentSpeed;
+                            utterance.pitch = pitch + 0.3;
+                            utterance.volume = volume * 1.1;
+                            break;
+                        case 'whisper':
+                            utterance.rate = rate * this.currentSpeed;
+                            utterance.pitch = pitch - 0.15;
+                            utterance.volume = volume * 0.5;
+                            break;
+                        case 'shout':
+                            utterance.rate = rate * this.currentSpeed;
+                            utterance.pitch = pitch + 0.4;
+                            utterance.volume = volume * 1.35;
+                            break;
+                        default:
+                            utterance.rate = rate * this.currentSpeed;
+                            utterance.pitch = pitch + 0.2;
+                            utterance.volume = volume * 1.05;
+                    }
+                } else {
+                    // English: Use speed variations for expression
+                    switch (emotion) {
+                        case 'excited':
+                            utterance.rate = rate * 1.6 * this.currentSpeed;
+                            utterance.pitch = pitch + 0.5;
+                            utterance.volume = volume * 1.15;
+                            break;
+                        case 'question':
+                            utterance.rate = rate * 1.15 * this.currentSpeed;
+                            utterance.pitch = pitch + 0.45;
+                            utterance.volume = volume * 1.05;
+                            break;
+                        case 'whisper':
+                            utterance.rate = rate * 0.75 * this.currentSpeed;
+                            utterance.pitch = pitch - 0.2;
+                            utterance.volume = volume * 0.5;
+                            break;
+                        case 'shout':
+                            utterance.rate = rate * 1.7 * this.currentSpeed;
+                            utterance.pitch = pitch + 0.6;
+                            utterance.volume = volume * 1.3;
+                            break;
+                        default:
+                            utterance.rate = rate * 1.3 * this.currentSpeed;
+                            utterance.pitch = pitch + 0.3;
+                            utterance.volume = volume * 1.05;
+                    }
+                }
+            } else {
+                utterance.rate = rate * this.currentSpeed;
+                utterance.pitch = pitch;
+                utterance.volume = volume * 0.95;
+            }
+
+            // Track segment index
+            utterance.onstart = () => {
+                this.currentSegmentIndex = i;
+                this.currentUtterance = utterance;
+            };
+
+            utterance.onend = () => {
+                if (i === this.segments.length - 1) {
+                    this.isPlaying = false;
+                    console.log('✅ Story complete');
+                }
+            };
+
+            this.synth.speak(utterance);
         }
     }
 

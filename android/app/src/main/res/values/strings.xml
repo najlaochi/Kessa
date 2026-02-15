@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">حكايات ماما</string>
+    <string name="title_activity_main">حكايات ماما</string>
+    <string name="package_name">com.mamatales.app</string>
+    <string name="custom_url_scheme">com.mamatales.app</string>
+</resources>

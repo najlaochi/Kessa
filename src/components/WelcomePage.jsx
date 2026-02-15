@@ -63,8 +63,7 @@ function WelcomePage({ onNameSubmit }) {
                         className={language === 'en' ? 'btn btn-primary' : 'btn'}
                         style={{
                             padding: '0.5rem 1rem',
-                            fontSize: '0.9rem',
-                            background: language === 'en' ? undefined : 'rgba(255, 255, 255, 0.1)'
+                            fontSize: '0.9rem'
                         }}
                     >
                         English
@@ -75,8 +74,7 @@ function WelcomePage({ onNameSubmit }) {
                         className={language === 'ar' ? 'btn btn-primary' : 'btn'}
                         style={{
                             padding: '0.5rem 1rem',
-                            fontSize: '0.9rem',
-                            background: language === 'ar' ? undefined : 'rgba(255, 255, 255, 0.1)'
+                            fontSize: '0.9rem'
                         }}
                     >
                         عربي
@@ -85,7 +83,7 @@ function WelcomePage({ onNameSubmit }) {
 
                 <div className="page-header">
                     <h1 className="page-title float-animation">
-                        ✨ {language === 'ar' ? 'قصة' : 'Kissa'} ✨
+                        ✨ {language === 'ar' ? 'حكايات ماما' : 'Mama\'s Tales'} ✨
                     </h1>
                     <p className="page-subtitle">
                         {language === 'ar'

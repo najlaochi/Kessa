@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Tester - Kessa App</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .voice-list {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .voice-item {
+            padding: 10px;
+            margin: 5px 0;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+            border-left: 4px solid #4CAF50;
+        }
+
+        .voice-item.selected {
+            background: rgba(76, 175, 80, 0.3);
+            border-left: 4px solid #FFD700;
+            font-weight: bold;
+        }
+
+        .voice-item.male {
+            border-left: 4px solid #f44336;
+            background: rgba(244, 67, 54, 0.2);
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+            transition: transform 0.2s;
+        }
+
+        button:hover {
+            transform: scale(1.05);
+        }
+
+        .test-text {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 100px;
+            padding: 10px;
+            border-radius: 5px;
+            border: none;
+            background: rgba(255, 255, 255, 0.9);
+            color: #333;
+            font-size: 14px;
+        }
+
+        .info {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            margin: 10px 0;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+
+        .badge.female {
+            background: #4CAF50;
+        }
+
+        .badge.male {
+            background: #f44336;
+        }
+
+        .badge.unknown {
+            background: #FF9800;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🎙️ Voice Selection Tester</h1>
+
+        <div class="info">
+            <strong>📊 Voice Statistics:</strong>
+            <div id="stats"></div>
+        </div>
+
+        <div class="info">
+            <strong>✅ Selected Voice:</strong>
+            <div id="selectedVoice" style="font-size: 18px; margin-top: 10px;">Loading...</div>
+        </div>
+
+        <div class="test-text">
+            <label><strong>Test Text:</strong></label>
+            <textarea
+                id="testText">Hello! My name is Sara. I am going on a magical adventure through the enchanted forest. "Wow!" she exclaimed. "This is amazing!"</textarea>
+        </div>
+
+        <div style="text-align: center;">
+            <button onclick="testVoice('en')">🇬🇧 Test English Voice</button>
+            <button onclick="testVoice('ar')">🇸🇦 Test Arabic Voice</button>
+            <button onclick="stopVoice()">⏹️ Stop</button>
+        </div>
+
+        <h3>📋 All Available Voices:</h3>
+        <div class="voice-list" id="voiceList">Loading voices...</div>
+    </div>
+
+    <script type="module">
+        import audioService from './src/services/audioService.js';
+
+        let selectedVoice = null;
+        const synth = window.speechSynthesis;
+
+        async function loadVoices() {
+            const voices = await audioService.getVoices();
+
+            // Get statistics
+            const totalVoices = voices.length;
+            const englishVoices = voices.filter(v => v.lang.startsWith('en')).length;
+            const arabicVoices = voices.filter(v => v.lang.startsWith('ar')).length;
+            const femaleVoices = voices.filter(v => {
+                const name = v.name.toLowerCase();
+                return name.includes('female') ||
+                    (!name.includes('male') && !name.includes('man'));
+            }).length;
+
+            document.getElementById('stats').innerHTML = `
+                Total: ${totalVoices} | 
+                English: ${englishVoices} | 
+                Arabic: ${arabicVoices} | 
+                Likely Female: ${femaleVoices}
+            `;
+
+            // Display all voices
+            const voiceList = document.getElementById('voiceList');
+            voiceList.innerHTML = voices.map(voice => {
+                const nameLower = voice.name.toLowerCase();
+                let gender = 'unknown';
+                let genderClass = 'unknown';
+
+                if (nameLower.includes('female')) {
+                    gender = 'female';
+                    genderClass = 'female';
+                } else if (nameLower.includes('male') && !nameLower.includes('female')) {
+                    gender = 'male';
+                    genderClass = 'male';
+                } else if (nameLower.includes('woman')) {
+                    gender = 'female';
+                    genderClass = 'female';
+                } else if (nameLower.includes('man') && !nameLower.includes('woman')) {
+                    gender = 'male';
+                    genderClass = 'male';
+                }
+
+                return `
+                    <div class="voice-item ${genderClass}">
+                        <strong>${voice.name}</strong>
+                        <span class="badge ${genderClass}">${gender.toUpperCase()}</span>
+                        <br>
+                        <small>Language: ${voice.lang} | Local: ${voice.localService ? 'Yes' : 'No'}</small>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        window.testVoice = async function (language) {
+            console.log(`Testing ${language} voice...`);
+
+            // Get the selected voice using the same logic as the app
+            selectedVoice = await audioService.getCalmFemaleVoice(language);
+
+            if (!selectedVoice) {
+                alert('No voice found for ' + language);
+                return;
+            }
+
+            // Display selected voice
+            document.getElementById('selectedVoice').innerHTML = `
+                <div style="background: rgba(76, 175, 80, 0.3); padding: 15px; border-radius: 10px;">
+                    <strong>🎙️ ${selectedVoice.name}</strong><br>
+                    Language: ${selectedVoice.lang}<br>
+                    Local: ${selectedVoice.localService ? 'Yes' : 'No'}
+                </div>
+            `;
+
+            // Highlight selected voice in list
+            document.querySelectorAll('.voice-item').forEach(item => {
+                item.classList.remove('selected');
+                if (item.textContent.includes(selectedVoice.name)) {
+                    item.classList.add('selected');
+                    item.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            });
+
+            // Test the voice
+            const text = document.getElementById('testText').value;
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.voice = selectedVoice;
+            utterance.rate = language === 'ar' ? 0.85 : 0.80;
+            utterance.pitch = language === 'ar' ? 1.02 : 1.05;
+            utterance.volume = 1.0;
+
+            synth.speak(utterance);
+            console.log('Speaking with:', selectedVoice.name);
+        };
+
+        window.stopVoice = function () {
+            synth.cancel();
+        };
+
+        // Load voices on page load
+        loadVoices();
+
+        // Reload if voices change (mobile browsers)
+        if (synth.onvoiceschanged !== undefined) {
+            synth.onvoiceschanged = loadVoices;
+        }
+    </script>
+</body>
+
+</html>

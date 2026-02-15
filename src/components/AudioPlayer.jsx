@@ -90,22 +90,33 @@ function AudioPlayer({ childName }) {
             const musicUrl = '/music/backgroundmusicforvideos-sleeping-music-calm-healing-relaxation-background-intro-theme-304096 (1).mp3';
             const language = localStorage.getItem('language') || 'en';
 
-            // Language-specific voice tuning
+            // Detect mobile device type
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+            const isAndroid = /Android/.test(navigator.userAgent);
+
+            // iOS Safari has very limited Web Speech API support
+            if (isIOS) {
+                alert(language === 'ar'
+                    ? 'تنبيه: متصفح Safari لديه دعم محدود للصوت. للحصول على أفضل تجربة، استخدم Chrome أو قم بتثبيت التطبيق.'
+                    : 'Note: Safari has limited voice support. For best experience, use Chrome browser or install the app.');
+            }
+
+            // Language-specific voice tuning - warm, human-like lady voices
             let voiceSettings;
             if (language === 'ar') {
-                // Arabic: Charming, attractive, warm motherly voice
+                // Arabic: Warm, natural, human-like female voice
                 voiceSettings = {
-                    rate: 0.85,   // Good base reading speed (will be 1.06 with 1.25x speed)
-                    pitch: 0.92,  // Warm, charming pitch - not too deep, pleasant and attractive
+                    rate: isAndroid ? 0.90 : 0.83,   // Slower, warmer pace for storytelling
+                    pitch: 1.08,  // Slightly higher pitch for warmer female voice
                     volume: 1.0,
                     musicVolume: musicVolume,
                     language: language
                 };
             } else {
-                // English: Existing magical storytelling voice
+                // English: Warm, natural, human-like lady voice
                 voiceSettings = {
-                    rate: 0.7,    // Slower, magical storytelling pace
-                    pitch: 0.88,  // Lower pitch for deep, warm motherly voice
+                    rate: isAndroid ? 0.85 : 0.78,   // Slower for warmth and clarity
+                    pitch: 1.10,  // Higher pitch for gentle, warm, comforting female voice
                     volume: 1.0,  // Clear, comforting volume
                     musicVolume: musicVolume,
                     language: language
@@ -182,18 +193,21 @@ function AudioPlayer({ childName }) {
         <div className="page">
             {/* Background Stars */}
             <div className="stars">
-                {[...Array(50)].map((_, i) => (
+                {[...Array(120)].map((_, i) => (
                     <div
                         key={i}
                         className="star"
                         style={{
                             left: `${Math.random() * 100}%`,
                             top: `${Math.random() * 100}%`,
-                            animationDelay: `${Math.random() * 3}s`
+                            animationDelay: `${Math.random() * 5}s`
                         }}
                     />
                 ))}
             </div>
+
+            {/* Moon */}
+            <div className="moon"></div>
 
             <div className="container" style={{ position: 'relative', zIndex: 1, maxWidth: '800px' }}>
                 {/* Story Header */}
