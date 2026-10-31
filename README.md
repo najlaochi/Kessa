@@ -247,3 +247,12 @@ This project is open source and available for personal and commercial use.
 ## 🎉 Enjoy!
 
 Create magical bedtime stories that make every child the hero of their own adventure! ✨
+
+
+## ✍️ Writing stories: name & boy/girl placeholders
+
+- `{HERO}` or `{بطل}` is replaced by the child's name.
+- `{boy word|girl word}` is chosen from the gender picked on the welcome screen:
+  - Arabic: `ذهب {بطل} و{وجد|وجدت} صدفة. {هو|هي} {سعيد|سعيدة}.`
+  - English: `{He|She} hugged {his|her} cat.`
+  - An empty side is allowed: `سعيد{|ة}`.

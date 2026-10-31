@@ -44,109 +44,23 @@
 7. Create `.env` file in project root (copy from `.env.example`)
 8. Paste your Firebase config values into `.env`
 
-### 6. Update Security Rules
+### 6. Security Rules
 
-#### Firestore Rules
-Go to Firestore Database → Rules tab and paste:
-
-```javascript
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    // Helper function to check if user is admin
-    function isAdmin() {
-      return request.auth != null && 
-             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
-    }
-    
-    // Subjects - read by all, write by admins only
-    match /subjects/{subjectId} {
-      allow read: if true;
-      allow create, update, delete: if isAdmin();
-    }
-    
-    // Stories - read by all, write by admins only
-    match /stories/{storyId} {
-      allow read: if true;
-      allow create, update, delete: if isAdmin();
-    }
-    
-    // Users - read by authenticated, write by admins only
-    match /users/{userId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth.uid == userId;
-      allow update, delete: if isAdmin();
-    }
-  }
-}
-```
-
-#### Storage Rules
-Go to Storage → Rules tab and paste:
-
-```javascript
-rules_version = '2';
-service firebase.storage {
-  match /b/{bucket}/o {
-    match /subjects/{allPaths=**} {
-      allow read: if true;
-      allow write: if request.auth != null;
-    }
-    
-    match /stories/{allPaths=**} {
-      allow read: if true;
-      allow write: if request.auth != null;
-    }
-    
-    match /music/{allPaths=**} {
-      allow read: if true;
-      allow write: if request.auth != null;
-    }
-  }
-}
-```
-
-### 7. Create First Admin User
-
-1. Run the app: `npm run dev`
-2. Navigate to http://localhost:5173/admin/login
-3. Check the "Register as first admin" checkbox
-4. Enter your email and password
-5. Click "Create Admin Account"
-
-You're now the admin and can start adding subjects and stories!
-
-### 8. (Optional) Deploy to Firebase Hosting
+The rules now live in `firestore.rules` and `storage.rules`. Deploy them with:
 
 ```bash
-npm run build
-npm install -g firebase-tools
-firebase login
-firebase init hosting
-# Select existing project
-# Public directory: dist
-# Single-page app: Yes
-# Automatic builds: No
-firebase deploy
+npx firebase-tools deploy --only firestore:rules,storage
 ```
 
-Your app will be live at: `https://your-project-id.web.app`
+Important: "test mode" leaves your database open to anyone and expires after 30 days, after which the app stops working. Deploy these rules before sharing the app.
 
----
+### 7. Create the Admin (once, in the console)
 
-## Troubleshooting
+For safety, the app no longer lets anyone register as admin.
 
-**Problem**: "Firebase config not found"
-- Check that `.env` file exists and has all variables
-- Variables must start with `VITE_`
-
-**Problem**: "Permission denied" errors
-- Make sure you've updated Firestore Security Rules
-- Rules should allow read access to subjects/stories collections
-
-**Problem**: Can't create admin account
-- Ensure Email/Password authentication is enabled in Firebase Console
-
----
-
-Need help? Check the [Firebase Documentation](https://firebase.google.com/docs)
+1. Firebase Console → Authentication → Users → **Add user**, then enter your email and password.
+2. Copy the new user's **UID**.
+3. Firestore → collection `users` → **Add document**, with Document ID = that UID and fields:
+   - `email` (string): your email
+   - `isAdmin` (boolean): `true`
+4. Sign in at `/admin/login`.
