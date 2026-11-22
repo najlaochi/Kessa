@@ -8,7 +8,9 @@ import {
     deleteDoc,
     query,
     where,
-    orderBy
+    orderBy,
+    limit,
+    serverTimestamp
 } from 'firebase/firestore';
 import { db } from './firebaseConfig';
 
@@ -47,6 +49,51 @@ export const getStoryContent = (story, language = 'en') => {
 export const getContentLanguage = (story, language = 'en') => {
     if (language === 'ar' && story?.content_ar) return 'ar';
     return 'en';
+};
+
+// ==================== FREE STORIES & WAITLIST ====================
+
+/**
+ * Stories are open when marked "free" in the admin editor.
+ * If no story is marked free yet, every story stays open (so nothing breaks before you choose).
+ */
+export const hasFreeStoriesConfigured = async () => {
+    try {
+        const snap = await getDocs(query(collection(db, 'stories'), where('isFree', '==', true), limit(1)));
+        return !snap.empty;
+    } catch (error) {
+        console.error('Error checking free stories:', error);
+        return false;
+    }
+};
+
+export const isStoryOpen = (story, freeConfigured) => !freeConfigured || story?.isFree === true;
+
+/** Every story, free ones first, then newest first. Works even if some stories have no createdAt. */
+export const getStoriesForListing = async () => {
+    try {
+        const snapshot = await getDocs(collection(db, 'stories'));
+        const toTime = (value) => (value?.toMillis ? value.toMillis() : value ? new Date(value).getTime() : 0);
+        return snapshot.docs
+            .map((d) => ({ id: d.id, ...d.data() }))
+            .sort((a, b) => (b.isFree === true) - (a.isFree === true) || toTime(b.createdAt) - toTime(a.createdAt));
+    } catch (error) {
+        console.error('Error fetching stories:', error);
+        return [];
+    }
+};
+
+/** Parents leave an email to hear about new stories. Only admins can read the list. */
+export const joinWaitlist = async (email, language) => {
+    const clean = String(email || '').trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean) || clean.length > 200) {
+        throw new Error('invalid-email');
+    }
+    await addDoc(collection(db, 'waitlist'), {
+        email: clean,
+        language: language === 'ar' ? 'ar' : 'en',
+        createdAt: serverTimestamp()
+    });
 };
 
 // ==================== SUBJECTS ====================

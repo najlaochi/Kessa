@@ -1,8 +1,8 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import WelcomePage from './components/WelcomePage';
-import SubjectSelector from './components/SubjectSelector';
-import StoryBrowser from './components/StoryBrowser';
+import StoryList from './components/StoryList';
+import RecordStory from './components/RecordStory';
 import AudioPlayer from './components/AudioPlayer';
 import PrintableStory from './components/PrintableStory';
 import PrivacyPolicy from './components/PrivacyPolicy';
@@ -58,8 +58,11 @@ function App() {
             <Routes>
                 {/* User Routes */}
                 <Route path="/" element={<WelcomePage onNameSubmit={updateChildName} />} />
-                <Route path="/subjects" element={<SubjectSelector childName={childName} />} />
-                <Route path="/stories/:subjectId" element={<StoryBrowser childName={childName} />} />
+                <Route path="/stories" element={<StoryList childName={childName} />} />
+                {/* Old category pages now go to the single stories list */}
+                <Route path="/subjects" element={<Navigate to="/stories" replace />} />
+                <Route path="/stories/:subjectId" element={<Navigate to="/stories" replace />} />
+                <Route path="/record/:storyId" element={<RecordStory childName={childName} />} />
                 <Route path="/play/:storyId" element={<AudioPlayer childName={childName} />} />
                 <Route path="/print/:storyId" element={<PrintableStory childName={childName} />} />
                 <Route path="/privacy" element={<PrivacyPolicy />} />

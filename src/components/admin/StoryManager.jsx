@@ -96,7 +96,7 @@ function StoryManager() {
                                             {story.title_en || story.title || story.title_ar || 'Untitled'}
                                         </h4>
                                         <p style={{ opacity: 0.7, fontSize: '0.9rem', marginBottom: '0.5rem' }}>
-                                            Subject: <strong>{getSubjectName(story.subjectId)}</strong>
+                                            {story.isFree ? '🔓 Free' : '🔒 Coming soon'}
                                         </p>
                                         {story.duration && (
                                             <p style={{ opacity: 0.6, fontSize: '0.85rem' }}>

@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { getAllSubjects, addStory, getStoryById, updateStory, replaceHeroName } from '../../services/storyService';
+import { generateStoryAudio } from '../../services/cloudTtsService';
 import { uploadStoryFile } from '../../services/uploadService';
 
 function StoryEditor() {
+    const { id } = useParams();
     const [subjects, setSubjects] = useState([]);
     const [story, setStory] = useState({
         title_en: '',
@@ -11,6 +13,7 @@ function StoryEditor() {
         content_en: '',
         content_ar: '',
         subjectId: '',
+        isFree: false,
         duration: 5,
         thumbnailUrl: '',
         illustrations: [],
@@ -20,10 +23,12 @@ function StoryEditor() {
     const [uploading, setUploading] = useState('');
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [generatingAudio, setGeneratingAudio] = useState({ en: false, ar: false });
+    const [audioStatus, setAudioStatus] = useState({ en: '', ar: '' });
+    const [storyId, setStoryId] = useState(id || null);
     const [previewName, setPreviewName] = useState('Alex');
     const [showPreview, setShowPreview] = useState(false);
     const [activeTab, setActiveTab] = useState('en'); // 'en' or 'ar'
-    const { id } = useParams();
     const navigate = useNavigate();
     const isEditing = !!id;
 
@@ -45,7 +50,8 @@ function StoryEditor() {
                     title_ar: storyData.title_ar || '',
                     content_en: storyData.content_en || storyData.content || '',
                     content_ar: storyData.content_ar || '',
-                    subjectId: storyData.subjectId,
+                    subjectId: storyData.subjectId || '',
+                    isFree: storyData.isFree === true,
                     duration: storyData.duration || 5,
                     thumbnailUrl: storyData.thumbnailUrl || '',
                     illustrations: storyData.illustrations || [],
@@ -97,11 +103,6 @@ function StoryEditor() {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        if (!story.subjectId) {
-            alert('Please select a subject');
-            return;
-        }
-
         // Check if at least one language has content
         if (!story.content_en && !story.content_ar) {
             alert('Please provide content in at least one language (English or Arabic)');
@@ -125,16 +126,51 @@ function StoryEditor() {
         setSaving(true);
 
         try {
+            let savedId;
             if (isEditing) {
                 await updateStory(id, story);
+                savedId = id;
             } else {
-                await addStory(story);
+                const result = await addStory(story);
+                savedId = result.id;
             }
-            navigate('/admin/stories');
+            setStoryId(savedId);
+            alert('✅ Story saved! You can now generate audio below.');
         } catch (error) {
             alert('Error saving story: ' + error.message);
         } finally {
             setSaving(false);
+        }
+    };
+
+    const handleGenerateAudio = async (language) => {
+        const currentStoryId = storyId || id;
+        if (!currentStoryId) {
+            alert('Please save the story first before generating audio.');
+            return;
+        }
+
+        const text = language === 'ar' ? story.content_ar : story.content_en;
+        if (!text || text.trim().length < 10) {
+            alert(`No ${language === 'ar' ? 'Arabic' : 'English'} content to generate audio for.`);
+            return;
+        }
+
+        // Remove placeholders for audio (use a generic name)
+        const cleanText = text.replace(/{HERO}/g, 'Hero').replace(/{بطل}/g, 'بطل');
+
+        setGeneratingAudio(prev => ({ ...prev, [language]: true }));
+        setAudioStatus(prev => ({ ...prev, [language]: '⏳ Generating audio...' }));
+
+        try {
+            const result = await generateStoryAudio(currentStoryId, cleanText, language);
+            setAudioStatus(prev => ({ ...prev, [language]: `✅ Audio ready!` }));
+            console.log('Audio URL:', result.audioUrl);
+        } catch (error) {
+            console.error('Audio generation error:', error);
+            setAudioStatus(prev => ({ ...prev, [language]: `❌ Failed: ${error.message}` }));
+        } finally {
+            setGeneratingAudio(prev => ({ ...prev, [language]: false }));
         }
     };
 
@@ -165,25 +201,19 @@ function StoryEditor() {
                 <div className="admin-card">
                     <form onSubmit={handleSubmit}>
                         <div className="form-group">
-                            <label className="form-label">Subject Category *</label>
-                            <select
-                                className="form-select"
-                                value={story.subjectId}
-                                onChange={(e) => setStory({ ...story, subjectId: e.target.value })}
-                                required
-                            >
-                                <option value="">Select a subject...</option>
-                                {subjects.map((subject) => (
-                                    <option key={subject.id} value={subject.id}>
-                                        {subject.icon} {subject.name}
-                                    </option>
-                                ))}
-                            </select>
-                            {subjects.length === 0 && (
-                                <p style={{ fontSize: '0.85rem', opacity: 0.7, marginTop: '0.5rem' }}>
-                                    No subjects available. <Link to="/admin/subjects" style={{ color: 'var(--primary-purple-light)' }}>Create one first</Link>
-                                </p>
-                            )}
+                            <label style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', cursor: 'pointer', fontSize: '1.1rem' }}>
+                                <input
+                                    type="checkbox"
+                                    checked={!!story.isFree}
+                                    onChange={(e) => setStory({ ...story, isFree: e.target.checked })}
+                                    style={{ width: '1.3rem', height: '1.3rem' }}
+                                />
+                                🔓 Free story (open to everyone)
+                            </label>
+                            <p style={{ fontSize: '0.85rem', opacity: 0.7, marginTop: '0.5rem' }}>
+                                Stories that are not free show as "Coming soon" with an email sign-up.
+                                Until you tick at least one story, all stories stay open.
+                            </p>
                         </div>
 
                         <div className="form-group">
@@ -201,7 +231,7 @@ function StoryEditor() {
 
                         {/* Pictures for the printable book */}
                         <div className="form-group">
-                            <label className="form-label">Cover image</label>
+                            <label className="form-label">Cover image (optional, for the printable book)</label>
                             {story.thumbnailUrl && (
                                 <div style={{ marginBottom: '0.5rem' }}>
                                     <img src={story.thumbnailUrl} alt="Cover" style={{ maxWidth: '200px', borderRadius: '8px', display: 'block' }} />
@@ -215,7 +245,7 @@ function StoryEditor() {
                         </div>
 
                         <div className="form-group">
-                            <label className="form-label">Illustrations for the printable book (in page order)</label>
+                            <label className="form-label">Illustrations (optional, for the printable book, in page order)</label>
                             <p style={{ fontSize: '0.85rem', opacity: 0.7, marginBottom: '0.5rem' }}>
                                 The story text is shared out evenly across these pictures, one picture per page.
                             </p>
@@ -384,7 +414,7 @@ function StoryEditor() {
                             </>
                         )}
 
-                        <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
+                        <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem', flexWrap: 'wrap' }}>
                             <button type="submit" className="btn btn-primary" disabled={saving || !!uploading}>
                                 {saving ? 'Saving...' : (isEditing ? '💾 Update Story' : '✨ Create Story')}
                             </button>
@@ -399,6 +429,57 @@ function StoryEditor() {
                                 Cancel
                             </Link>
                         </div>
+
+                        {/* ── Generate Audio Section ── */}
+                        {(storyId || id) && (
+                            <div style={{
+                                marginTop: '2rem',
+                                padding: '1.5rem',
+                                background: 'rgba(139, 92, 246, 0.1)',
+                                border: '1px solid rgba(139, 92, 246, 0.3)',
+                                borderRadius: 'var(--radius-md)'
+                            }}>
+                                <h3 style={{ color: 'white', marginBottom: '1rem' }}>🎤 Generate Voice Audio</h3>
+                                <p style={{ fontSize: '0.9rem', opacity: 0.8, marginBottom: '1rem' }}>
+                                    Generate high-quality Google Cloud TTS audio. This creates an MP3 file stored in Firebase Storage.
+                                </p>
+
+                                <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                                    {story.content_en && (
+                                        <div>
+                                            <button
+                                                type="button"
+                                                className="btn btn-primary"
+                                                onClick={() => handleGenerateAudio('en')}
+                                                disabled={generatingAudio.en}
+                                                style={{ minWidth: '200px' }}
+                                            >
+                                                {generatingAudio.en ? '⏳ Generating...' : '🇬🇧 Generate English Audio'}
+                                            </button>
+                                            {audioStatus.en && (
+                                                <p style={{ fontSize: '0.85rem', marginTop: '0.5rem' }}>{audioStatus.en}</p>
+                                            )}
+                                        </div>
+                                    )}
+                                    {story.content_ar && (
+                                        <div>
+                                            <button
+                                                type="button"
+                                                className="btn btn-primary"
+                                                onClick={() => handleGenerateAudio('ar')}
+                                                disabled={generatingAudio.ar}
+                                                style={{ minWidth: '200px' }}
+                                            >
+                                                {generatingAudio.ar ? '⏳ Generating...' : '🇸🇦 Generate Arabic Audio'}
+                                            </button>
+                                            {audioStatus.ar && (
+                                                <p style={{ fontSize: '0.85rem', marginTop: '0.5rem', direction: 'rtl' }}>{audioStatus.ar}</p>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
                     </form>
                 </div>
 

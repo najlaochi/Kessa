@@ -1,6 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { getStoryById, replaceHeroName, getStoryTitle, getStoryContent, getContentLanguage } from '../services/storyService';
+import {
+    getStoryById,
+    replaceHeroName,
+    getStoryTitle,
+    getStoryContent,
+    getContentLanguage,
+    hasFreeStoriesConfigured,
+    isStoryOpen
+} from '../services/storyService';
 import { cleanStoryText } from '../utils/textCleaner';
 
 /**
@@ -68,7 +76,11 @@ function PrintableStory({ childName }) {
             navigate('/');
             return;
         }
-        getStoryById(storyId).then((data) => {
+        Promise.all([getStoryById(storyId), hasFreeStoriesConfigured()]).then(([data, freeConfigured]) => {
+            if (data && !isStoryOpen(data, freeConfigured)) {
+                navigate('/stories');
+                return;
+            }
             setStory(data);
             setLoading(false);
         });
@@ -95,7 +107,7 @@ function PrintableStory({ childName }) {
             <style>{PRINT_CSS}</style>
 
             <div className="print-toolbar no-print">
-                <button className="secondary" onClick={() => navigate(-1)}>
+                <button className="secondary" onClick={() => navigate(`/play/${storyId}`)}>
                     {isArabic ? '→ رجوع' : '← Back'}
                 </button>
                 <button className="primary" onClick={() => window.print()}>

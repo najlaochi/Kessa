@@ -275,7 +275,7 @@ You can also upload your own recording (MP3) per language in the story editor; i
    cd functions && npm install && cd ..
    firebase deploy --only functions,firestore:rules,storage
    ```
-5. Add `VITE_FIREBASE_FUNCTIONS_REGION=europe-west1` to `.env` (must match `REGION` in `functions/index.js`).
+5. (Optional) `VITE_FIREBASE_FUNCTIONS_REGION` in `.env` — only if you change `REGION` in `functions/index.js` (default `us-central1`).
 
 Change the narrator voice in `VOICES` at the top of `functions/index.js`.
 Daily limits (`DAILY_LIMIT_PER_USER`, `DAILY_LIMIT_TOTAL`) protect you from unexpected costs.
@@ -293,3 +293,23 @@ In the admin story editor, upload a **cover image** and **illustrations** (in pa
 - Restrict the Firebase web API key: Google Cloud Console → APIs & Services → Credentials → your Browser key →
   Application restrictions: *Websites* → add `kessa.fikrjameel.com/*` and your `*.web.app` domain.
 - Edit `src/components/PrivacyPolicy.jsx` (replace the [brackets]) before going public.
+
+
+## 🎙️ Phase 1 (free plan): parents record the story
+
+- After entering the child's name, parents see **one list of stories** (no categories).
+- Stories ticked **Free story** in the admin editor are open; the others show **🔒 Coming soon**
+  and an email box ("Notify me"). Emails are saved in Firestore → `waitlist` (only admins can read them).
+  Until at least one story is ticked as free, every story stays open.
+- On a story, parents tap **Record in your voice**: the text appears with the child's name, they read it aloud,
+  listen back and save. The recording stays **on that phone only** (nothing uploaded, free and private)
+  and plays first next time, with the calm music underneath.
+- The personalised AI voice is **off** on the free plan. To turn it on later (Blaze plan), set
+  `VITE_ENABLE_AI_VOICE=true` in `.env`, enable Anonymous sign-in and deploy the functions.
+
+Deploy on the free plan (no functions):
+
+```bash
+npm run build
+firebase deploy --only hosting,firestore:rules,storage
+```

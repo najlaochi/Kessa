@@ -1,10 +1,14 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import QRModal from './QRModal';
 
+// v4 — share/QR section moved above the form for visibility
 function WelcomePage({ onNameSubmit }) {
     const [childName, setChildName] = useState('');
     const [error, setError] = useState('');
     const [language, setLanguage] = useState(localStorage.getItem('language') || 'en');
+    const [showQR, setShowQR] = useState(false);
+    const [shareToast, setShareToast] = useState(null);
     const navigate = useNavigate();
 
     const handleSubmit = (e) => {
@@ -22,7 +26,7 @@ function WelcomePage({ onNameSubmit }) {
 
         localStorage.setItem('language', language);
         onNameSubmit(childName.trim());
-        navigate('/subjects');
+        navigate('/stories');
     };
 
     const handleLanguageChange = (lang) => {
@@ -30,22 +34,33 @@ function WelcomePage({ onNameSubmit }) {
         localStorage.setItem('language', lang);
     };
 
+    const handleShareApp = async (platform) => {
+        const appUrl = window.location.origin;
+        const isAr = language === 'ar';
+        const shareText = isAr
+            ? `✨ حكايات ماما — قصص سحرية حيث طفلك هو البطل! 🌙\n${appUrl}`
+            : `✨ Mama's Tales — magical bedtime stories where YOUR child is the hero! 🌙\n${appUrl}`;
+        const emoji = platform === 'instagram' ? '📸' : '🎵';
+        const label = platform === 'instagram' ? 'Instagram' : 'TikTok';
+
+        if (navigator.share) {
+            try {
+                await navigator.share({ title: isAr ? 'حكايات ماما' : "Mama's Tales", text: shareText, url: appUrl });
+            } catch (_) { /* user cancelled */ }
+        } else {
+            try {
+                await navigator.clipboard.writeText(shareText);
+                setShareToast(`${emoji} Link copied! Share on ${label} 🎉`);
+            } catch {
+                setShareToast(`${emoji} Share on ${label}!`);
+            }
+            setTimeout(() => setShareToast(null), 2800);
+        }
+    };
+
     return (
         <div className="page">
-            {/* Background Stars */}
-            <div className="stars">
-                {[...Array(50)].map((_, i) => (
-                    <div
-                        key={i}
-                        className="star"
-                        style={{
-                            left: `${Math.random() * 100}% `,
-                            top: `${Math.random() * 100}% `,
-                            animationDelay: `${Math.random() * 3} s`
-                        }}
-                    />
-                ))}
-            </div>
+
 
             <div className="container" style={{ position: 'relative', zIndex: 1 }}>
                 {/* Language Selector */}
@@ -61,10 +76,7 @@ function WelcomePage({ onNameSubmit }) {
                         type="button"
                         onClick={() => handleLanguageChange('en')}
                         className={language === 'en' ? 'btn btn-primary' : 'btn'}
-                        style={{
-                            padding: '0.5rem 1rem',
-                            fontSize: '0.9rem'
-                        }}
+                        style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }}
                     >
                         English
                     </button>
@@ -72,10 +84,7 @@ function WelcomePage({ onNameSubmit }) {
                         type="button"
                         onClick={() => handleLanguageChange('ar')}
                         className={language === 'ar' ? 'btn btn-primary' : 'btn'}
-                        style={{
-                            padding: '0.5rem 1rem',
-                            fontSize: '0.9rem'
-                        }}
+                        style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }}
                     >
                         عربي
                     </button>
@@ -90,6 +99,50 @@ function WelcomePage({ onNameSubmit }) {
                             ? 'قصص سحرية حيث أنت البطل!'
                             : 'Magical stories where YOU are the hero!'}
                     </p>
+                </div>
+
+                {/* ── Share & QR — placed HERE above the form ── */}
+                <div style={{
+                    marginBottom: '1.5rem',
+                    textAlign: 'center',
+                    background: 'rgba(139, 92, 246, 0.08)',
+                    border: '1px solid rgba(139, 92, 246, 0.2)',
+                    borderRadius: '16px',
+                    padding: '1rem',
+                    maxWidth: '500px',
+                    margin: '0 auto 1.5rem auto'
+                }}>
+                    <p style={{
+                        fontSize: '0.95rem',
+                        opacity: 0.9,
+                        marginBottom: '0.75rem',
+                        fontWeight: '600'
+                    }}>
+                        {language === 'ar' ? '📲 شارك التطبيق مع أصدقائك!' : '📲 Share with friends!'}
+                    </p>
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                        <button
+                            className="share-btn share-btn-instagram"
+                            onClick={() => handleShareApp('instagram')}
+                            title="Share on Instagram"
+                        >
+                            📸 Instagram
+                        </button>
+                        <button
+                            className="share-btn share-btn-tiktok"
+                            onClick={() => handleShareApp('tiktok')}
+                            title="Share on TikTok"
+                        >
+                            🎵 TikTok
+                        </button>
+                        <button
+                            className="share-btn share-btn-qr"
+                            onClick={() => setShowQR(true)}
+                            title="Show QR Code"
+                        >
+                            📷 QR Code
+                        </button>
+                    </div>
                 </div>
 
                 <div className="glass-card" style={{ maxWidth: '500px', margin: '0 auto' }}>
@@ -140,17 +193,14 @@ function WelcomePage({ onNameSubmit }) {
                 </div>
 
                 {/* Admin Link */}
-                <div style={{ marginTop: '3rem', textAlign: 'center' }}>
+                <div style={{ marginTop: '2rem', textAlign: 'center' }}>
                     <a
                         href="/admin/login"
                         style={{
-                            color: 'rgba(255, 255, 255, 0.5)',
+                            color: 'rgba(255, 255, 255, 0.4)',
                             textDecoration: 'none',
-                            fontSize: '0.85rem',
-                            transition: 'color 0.2s'
+                            fontSize: '0.8rem',
                         }}
-                        onMouseOver={(e) => e.target.style.color = 'rgba(255, 255, 255, 0.8)'}
-                        onMouseOut={(e) => e.target.style.color = 'rgba(255, 255, 255, 0.5)'}
                     >
                         {language === 'ar' ? 'تسجيل دخول المسؤول' : 'Admin Login'}
                     </a>
@@ -160,6 +210,22 @@ function WelcomePage({ onNameSubmit }) {
                     </a>
                 </div>
             </div>
+
+            {/* Share Toast */}
+            {shareToast && (
+                <div className="share-toast">
+                    {shareToast}
+                </div>
+            )}
+
+            {/* QR Modal */}
+            {showQR && (
+                <QRModal
+                    storyTitle={language === 'ar' ? 'حكايات ماما' : "Mama's Tales"}
+                    storyUrl={window.location.origin}
+                    onClose={() => setShowQR(false)}
+                />
+            )}
         </div>
     );
 }
