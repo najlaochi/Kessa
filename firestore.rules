@@ -8,6 +8,16 @@ service cloud.firestore {
     }
     match /subjects/{id} { allow read: if true; allow write: if isAdmin(); }
     match /stories/{id}  { allow read: if true; allow write: if isAdmin(); }
+    // Parents' emails for "new stories" news: anyone can add one, only admins can read
+    match /waitlist/{id} {
+      allow create: if request.resource.data.keys().hasOnly(['email', 'language', 'createdAt'])
+                    && request.resource.data.email is string
+                    && request.resource.data.email.size() <= 200
+                    && request.resource.data.email.matches('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$')
+                    && request.resource.data.language in ['ar', 'en']
+                    && request.resource.data.createdAt == request.time;
+      allow read, delete: if isAdmin();
+    }
     // narrationUsage is only used by the server (daily limits); no app access
     match /narrationUsage/{id} { allow read, write: if false; }
     match /users/{uid} {

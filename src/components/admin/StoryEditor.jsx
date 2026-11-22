@@ -13,6 +13,7 @@ function StoryEditor() {
         content_en: '',
         content_ar: '',
         subjectId: '',
+        isFree: false,
         duration: 5,
         thumbnailUrl: '',
         illustrations: [],
@@ -49,7 +50,8 @@ function StoryEditor() {
                     title_ar: storyData.title_ar || '',
                     content_en: storyData.content_en || storyData.content || '',
                     content_ar: storyData.content_ar || '',
-                    subjectId: storyData.subjectId,
+                    subjectId: storyData.subjectId || '',
+                    isFree: storyData.isFree === true,
                     duration: storyData.duration || 5,
                     thumbnailUrl: storyData.thumbnailUrl || '',
                     illustrations: storyData.illustrations || [],
@@ -100,11 +102,6 @@ function StoryEditor() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-
-        if (!story.subjectId) {
-            alert('Please select a subject');
-            return;
-        }
 
         // Check if at least one language has content
         if (!story.content_en && !story.content_ar) {
@@ -204,25 +201,19 @@ function StoryEditor() {
                 <div className="admin-card">
                     <form onSubmit={handleSubmit}>
                         <div className="form-group">
-                            <label className="form-label">Subject Category *</label>
-                            <select
-                                className="form-select"
-                                value={story.subjectId}
-                                onChange={(e) => setStory({ ...story, subjectId: e.target.value })}
-                                required
-                            >
-                                <option value="">Select a subject...</option>
-                                {subjects.map((subject) => (
-                                    <option key={subject.id} value={subject.id}>
-                                        {subject.icon} {subject.name}
-                                    </option>
-                                ))}
-                            </select>
-                            {subjects.length === 0 && (
-                                <p style={{ fontSize: '0.85rem', opacity: 0.7, marginTop: '0.5rem' }}>
-                                    No subjects available. <Link to="/admin/subjects" style={{ color: 'var(--primary-purple-light)' }}>Create one first</Link>
-                                </p>
-                            )}
+                            <label style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', cursor: 'pointer', fontSize: '1.1rem' }}>
+                                <input
+                                    type="checkbox"
+                                    checked={!!story.isFree}
+                                    onChange={(e) => setStory({ ...story, isFree: e.target.checked })}
+                                    style={{ width: '1.3rem', height: '1.3rem' }}
+                                />
+                                🔓 Free story (open to everyone)
+                            </label>
+                            <p style={{ fontSize: '0.85rem', opacity: 0.7, marginTop: '0.5rem' }}>
+                                Stories that are not free show as "Coming soon" with an email sign-up.
+                                Until you tick at least one story, all stories stay open.
+                            </p>
                         </div>
 
                         <div className="form-group">
@@ -240,7 +231,7 @@ function StoryEditor() {
 
                         {/* Pictures for the printable book */}
                         <div className="form-group">
-                            <label className="form-label">Cover image</label>
+                            <label className="form-label">Cover image (optional, for the printable book)</label>
                             {story.thumbnailUrl && (
                                 <div style={{ marginBottom: '0.5rem' }}>
                                     <img src={story.thumbnailUrl} alt="Cover" style={{ maxWidth: '200px', borderRadius: '8px', display: 'block' }} />
@@ -254,7 +245,7 @@ function StoryEditor() {
                         </div>
 
                         <div className="form-group">
-                            <label className="form-label">Illustrations for the printable book (in page order)</label>
+                            <label className="form-label">Illustrations (optional, for the printable book, in page order)</label>
                             <p style={{ fontSize: '0.85rem', opacity: 0.7, marginBottom: '0.5rem' }}>
                                 The story text is shared out evenly across these pictures, one picture per page.
                             </p>

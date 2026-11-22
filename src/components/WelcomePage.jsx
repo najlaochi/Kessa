@@ -26,7 +26,7 @@ function WelcomePage({ onNameSubmit }) {
 
         localStorage.setItem('language', language);
         onNameSubmit(childName.trim());
-        navigate('/subjects');
+        navigate('/stories');
     };
 
     const handleLanguageChange = (lang) => {

@@ -1,10 +1,23 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { getStoryById, replaceHeroName, getStoryTitle, getStoryContent, getContentLanguage } from '../services/storyService';
+import {
+    getStoryById,
+    replaceHeroName,
+    getStoryTitle,
+    getStoryContent,
+    getContentLanguage,
+    hasFreeStoriesConfigured,
+    isStoryOpen
+} from '../services/storyService';
 import { getNarrationUrl } from '../services/narrationService';
+import { getRecording } from '../services/recordingStore';
 import audioService from '../services/audioService';
 
 const MUSIC_URL = '/music/calm-night.mp3';
+
+// The personalised AI voice needs the Cloud Function (Blaze plan). Off until you set
+// VITE_ENABLE_AI_VOICE=true in .env, so the free plan never waits for it.
+const AI_VOICE_ENABLED = import.meta.env.VITE_ENABLE_AI_VOICE === 'true';
 
 function AudioPlayer({ childName }) {
     const [story, setStory] = useState(null);
@@ -20,6 +33,8 @@ function AudioPlayer({ childName }) {
     const navigate = useNavigate();
     const storyTextRef = useRef('');
     const contentLangRef = useRef('en');
+    const parentVoiceUrlRef = useRef('');
+    const [hasParentVoice, setHasParentVoice] = useState(false);
 
     // 'mp3' = natural voice file, 'browser' = the phone's built-in voice (fallback)
     const modeRef = useRef(null);
@@ -33,10 +48,21 @@ function AudioPlayer({ childName }) {
     const fetchStory = async () => {
         setLoading(true);
         try {
-            const storyData = await getStoryById(storyId);
+            const [storyData, freeConfigured] = await Promise.all([getStoryById(storyId), hasFreeStoriesConfigured()]);
+            if (storyData && !isStoryOpen(storyData, freeConfigured)) {
+                navigate('/stories');
+                return;
+            }
             if (storyData) {
                 setStory(storyData);
                 contentLangRef.current = getContentLanguage(storyData, uiLanguage);
+
+                // A recording the parent made on this device comes first
+                const saved = await getRecording(storyId, contentLangRef.current);
+                if (saved?.blob) {
+                    parentVoiceUrlRef.current = URL.createObjectURL(saved.blob);
+                    setHasParentVoice(true);
+                }
                 const storyContent = getStoryContent(storyData, uiLanguage);
                 if (!storyContent) {
                     console.error('No story content found for any language');
@@ -74,7 +100,10 @@ function AudioPlayer({ childName }) {
             return;
         }
         fetchStory();
-        return () => stopEverything();
+        return () => {
+            stopEverything();
+            if (parentVoiceUrlRef.current) URL.revokeObjectURL(parentVoiceUrlRef.current);
+        };
     }, [storyId, childName, navigate]);
 
     const resetState = () => {
@@ -171,15 +200,16 @@ function AudioPlayer({ childName }) {
         music.play().catch(() => {});
 
         const language = contentLangRef.current;
-        const ownRecording = story?.[`narrationUrl_${language}`];
+        const ownRecording = parentVoiceUrlRef.current || story?.[`narrationUrl_${language}`];
 
-        // Order: 1) your own recording  2) personalised natural voice (child's name)
-        //        3) the story's pre-generated audio (no name)  4) the phone's own voice
+        // Order: 1) the parent's recording on this device  2) the admin's uploaded recording
+        //        3) personalised AI voice (if enabled)  4) pre-generated audio  5) the phone's own voice
         setPreparing(true);
         try {
             let url = ownRecording;
             if (!url) {
                 try {
+                    if (!AI_VOICE_ENABLED) throw new Error('AI voice is off');
                     url = await getNarrationUrl(storyId, childName, language);
                 } catch (error) {
                     const pregenerated = story?.[`audioUrl_${language}`];
@@ -193,8 +223,8 @@ function AudioPlayer({ childName }) {
             console.warn('Natural voice not available, using the device voice:', error);
             music.pause();
             setNotice(t(
-                'The natural voice is not available right now, so the phone voice is used.',
-                'الصوت الطبيعي غير متاح الآن، لذلك نستخدم صوت الهاتف.'
+                'Tip: record this story in your own voice for a warmer bedtime 🎙️',
+                'نصيحة: سجّلي هذه القصة بصوتك ليكون وقت النوم أدفأ 🎙️'
             ));
             playWithBrowserVoice();
         } finally {
@@ -234,11 +264,7 @@ function AudioPlayer({ childName }) {
     // navigate(-1) doesn't work in the Android app (no history on first load), so go to the list
     const handleBackToStories = () => {
         stopEverything();
-        if (story && story.subjectId) {
-            navigate(`/stories/${story.subjectId}`);
-        } else {
-            navigate('/subjects');
-        }
+        navigate('/stories');
     };
 
     const handleProgressBarClick = (e) => {
@@ -270,7 +296,7 @@ function AudioPlayer({ childName }) {
             <div className="page">
                 <div className="glass-card text-center">
                     <h3>{language === 'ar' ? 'القصة غير موجودة!' : 'Story not found!'}</h3>
-                    <button className="btn btn-primary mt-3" onClick={() => navigate('/subjects')}>
+                    <button className="btn btn-primary mt-3" onClick={() => navigate('/stories')}>
                         {language === 'ar' ? 'العودة' : 'Go Back'}
                     </button>
                 </div>
@@ -395,6 +421,26 @@ function AudioPlayer({ childName }) {
                                 {language === 'ar' ? '⏹️ إيقاف' : '⏹️ Stop'}
                             </button>
                         )}
+                    </div>
+
+                    {/* Parent's own voice */}
+                    <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+                        {hasParentVoice && (
+                            <p style={{ marginBottom: '0.75rem', opacity: 0.9 }}>
+                                {t('💜 This story plays in your voice', '💜 هذه القصة تُروى بصوتك')}
+                            </p>
+                        )}
+                        <button
+                            className="btn btn-secondary"
+                            onClick={() => {
+                                stopEverything();
+                                navigate(`/record/${storyId}`);
+                            }}
+                        >
+                            {hasParentVoice
+                                ? t('🎙️ Record again', '🎙️ سجّلي من جديد')
+                                : t('🎙️ Record in your voice', '🎙️ سجّلي القصة بصوتك')}
+                        </button>
                     </div>
 
                     {notice && (
