@@ -9,15 +9,17 @@ createRoot(document.getElementById('root')).render(
     </StrictMode>,
 )
 
-// Register Service Worker for PWA
+// ── Service Worker Registration ──────
 if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
-            .then((registration) => {
-                console.log('SW registered:', registration);
-            })
-            .catch((error) => {
-                console.log('SW registration failed:', error);
-            });
+    window.addEventListener('load', async () => {
+        try {
+            // Just register it simply without the unregister/reload loop
+            const registration = await navigator.serviceWorker.register('/sw.js');
+            console.log('[SW] Registered SW:', registration.scope);
+
+            // Only reload if the user manually clicks an update button (handled elsewhere, or safely suppressed here)
+        } catch (error) {
+            console.warn('[SW] Registration failed:', error);
+        }
     });
 }

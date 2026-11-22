@@ -275,7 +275,7 @@ You can also upload your own recording (MP3) per language in the story editor; i
    cd functions && npm install && cd ..
    firebase deploy --only functions,firestore:rules,storage
    ```
-5. Add `VITE_FIREBASE_FUNCTIONS_REGION=europe-west1` to `.env` (must match `REGION` in `functions/index.js`).
+5. (Optional) `VITE_FIREBASE_FUNCTIONS_REGION` in `.env` — only if you change `REGION` in `functions/index.js` (default `us-central1`).
 
 Change the narrator voice in `VOICES` at the top of `functions/index.js`.
 Daily limits (`DAILY_LIMIT_PER_USER`, `DAILY_LIMIT_TOTAL`) protect you from unexpected costs.

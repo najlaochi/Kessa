@@ -9,6 +9,7 @@
  * The Google credentials stay on the server; nothing secret is sent to the browser.
  */
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import * as functionsV1 from 'firebase-functions/v1';
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
@@ -21,8 +22,8 @@ const ttsClient = new textToSpeech.TextToSpeechClient();
 
 // ---------- Settings you may want to change ----------
 
-// Must match VITE_FIREBASE_FUNCTIONS_REGION in the web app's .env
-const REGION = 'europe-west1';
+// Same region as generateStoryAudio (the Firebase default), so the app needs no extra setting
+const REGION = 'us-central1';
 
 // Voices: listen to samples at https://cloud.google.com/text-to-speech/docs/voices
 // and replace the names here to change the narrator.
@@ -202,3 +203,80 @@ export const generateNarration = onCall(
         return { url: publicUrl(bucket.name, path, token), cached: false };
     }
 );
+
+
+// ---------- generateStoryAudio (admin panel, existing feature) ----------
+// Called from the story editor: makes one non-personalised MP3 per story and language
+// (the name placeholder is read as "Hero" / "بطل") and saves its URL on the story.
+
+const ADMIN_VOICE_CONFIG = {
+    en: { languageCode: 'en-US', name: 'en-US-Neural2-F', ssmlGender: 'FEMALE' },
+    ar: { languageCode: 'ar-XA', name: 'ar-XA-Wavenet-A', ssmlGender: 'FEMALE' },
+};
+
+async function isAdmin(uid) {
+    const snap = await db.collection('users').doc(uid).get();
+    return snap.exists && snap.data().isAdmin === true;
+}
+
+export const generateStoryAudio = functionsV1
+    .runWith({ timeoutSeconds: 120, memory: '512MB' })
+    .https.onCall(async (data, context) => {
+        if (!context.auth || !(await isAdmin(context.auth.uid))) {
+            throw new functionsV1.https.HttpsError('permission-denied', 'Admins only');
+        }
+
+        const { storyId, text, language } = data || {};
+        if (!storyId || !text || !language) {
+            throw new functionsV1.https.HttpsError('invalid-argument', 'Missing storyId, text, or language');
+        }
+        if (text.length > 50000) {
+            throw new functionsV1.https.HttpsError('invalid-argument', 'Story text too long (max 50,000 characters)');
+        }
+
+        const voiceCfg = ADMIN_VOICE_CONFIG[language] || ADMIN_VOICE_CONFIG.en;
+        try {
+            // Long stories are split so each request stays under Google's 5000-byte limit
+            const buffers = [];
+            for (const chunk of splitIntoChunks(text)) {
+                const [response] = await ttsClient.synthesizeSpeech({
+                    input: { text: chunk },
+                    voice: voiceCfg,
+                    audioConfig: {
+                        audioEncoding: 'MP3',
+                        speakingRate: language === 'ar' ? 0.92 : 0.88,
+                        pitch: 1.2,
+                        effectsProfileId: ['headphone-class-device'],
+                    },
+                });
+                buffers.push(Buffer.from(response.audioContent));
+            }
+
+            const filePath = `story-audio/${storyId}/${language}.mp3`;
+            const bucket = getStorage().bucket();
+            const file = bucket.file(filePath);
+            const token = randomUUID();
+            await file.save(Buffer.concat(buffers), {
+                contentType: 'audio/mpeg',
+                resumable: false,
+                metadata: {
+                    metadata: {
+                        storyId,
+                        language,
+                        generatedAt: new Date().toISOString(),
+                        firebaseStorageDownloadTokens: token,
+                    },
+                },
+            });
+
+            const audioUrl = publicUrl(bucket.name, filePath, token);
+            await db.doc(`stories/${storyId}`).update({
+                [language === 'ar' ? 'audioUrl_ar' : 'audioUrl_en']: audioUrl,
+                [`audioGenerated_${language}`]: new Date(),
+            });
+            return { audioUrl };
+        } catch (error) {
+            console.error('TTS generation failed:', error);
+            throw new functionsV1.https.HttpsError('internal', 'TTS generation failed: ' + error.message);
+        }
+    });

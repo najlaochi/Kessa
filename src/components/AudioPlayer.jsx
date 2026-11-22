@@ -27,6 +27,7 @@ function AudioPlayer({ childName }) {
     const musicRef = useRef(null);
 
     const uiLanguage = localStorage.getItem('language') || 'en';
+    const language = uiLanguage;
     const t = (en, ar) => (uiLanguage === 'ar' ? ar : en);
 
     const fetchStory = async () => {
@@ -142,6 +143,15 @@ function AudioPlayer({ childName }) {
     const handlePlay = async () => {
         setNotice('');
 
+        // Unlock the phone's speech engine inside the tap (needed if we fall back to it later).
+        // Desktop Chrome misbehaves with this, so mobile only.
+        const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+        if (isMobile && 'speechSynthesis' in window && !isPaused) {
+            const unlock = new SpeechSynthesisUtterance('');
+            unlock.volume = 0;
+            window.speechSynthesis.speak(unlock);
+        }
+
         if (isPaused) {
             if (modeRef.current === 'mp3') {
                 narrationRef.current?.play();
@@ -163,9 +173,21 @@ function AudioPlayer({ childName }) {
         const language = contentLangRef.current;
         const ownRecording = story?.[`narrationUrl_${language}`];
 
+        // Order: 1) your own recording  2) personalised natural voice (child's name)
+        //        3) the story's pre-generated audio (no name)  4) the phone's own voice
         setPreparing(true);
         try {
-            const url = ownRecording || await getNarrationUrl(storyId, childName, language);
+            let url = ownRecording;
+            if (!url) {
+                try {
+                    url = await getNarrationUrl(storyId, childName, language);
+                } catch (error) {
+                    const pregenerated = story?.[`audioUrl_${language}`];
+                    if (!pregenerated) throw error;
+                    console.warn('Personalised voice not available, using the pre-generated audio:', error);
+                    url = pregenerated;
+                }
+            }
             await playMp3(url, music);
         } catch (error) {
             console.warn('Natural voice not available, using the device voice:', error);
@@ -209,6 +231,16 @@ function AudioPlayer({ childName }) {
         if (modeRef.current === 'browser') audioService.setSpeed(speed);
     };
 
+    // navigate(-1) doesn't work in the Android app (no history on first load), so go to the list
+    const handleBackToStories = () => {
+        stopEverything();
+        if (story && story.subjectId) {
+            navigate(`/stories/${story.subjectId}`);
+        } else {
+            navigate('/subjects');
+        }
+    };
+
     const handleProgressBarClick = (e) => {
         const rect = e.currentTarget.getBoundingClientRect();
         const percentage = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
@@ -237,9 +269,9 @@ function AudioPlayer({ childName }) {
         return (
             <div className="page">
                 <div className="glass-card text-center">
-                    <h3>Story not found!</h3>
+                    <h3>{language === 'ar' ? 'القصة غير موجودة!' : 'Story not found!'}</h3>
                     <button className="btn btn-primary mt-3" onClick={() => navigate('/subjects')}>
-                        Go Back
+                        {language === 'ar' ? 'العودة' : 'Go Back'}
                     </button>
                 </div>
             </div>
@@ -248,20 +280,7 @@ function AudioPlayer({ childName }) {
 
     return (
         <div className="page">
-            {/* Background Stars */}
-            <div className="stars">
-                {[...Array(120)].map((_, i) => (
-                    <div
-                        key={i}
-                        className="star"
-                        style={{
-                            left: `${Math.random() * 100}%`,
-                            top: `${Math.random() * 100}%`,
-                            animationDelay: `${Math.random() * 5}s`
-                        }}
-                    />
-                ))}
-            </div>
+
 
             {/* Moon */}
             <div className="moon"></div>
@@ -273,7 +292,7 @@ function AudioPlayer({ childName }) {
                         {story.thumbnailUrl && (
                             <img
                                 src={story.thumbnailUrl}
-                                alt={getStoryTitle(story, contentLangRef.current)}
+                                alt={story.title}
                                 style={{
                                     width: '100%',
                                     maxHeight: '300px',
@@ -287,7 +306,7 @@ function AudioPlayer({ childName }) {
                             {replaceHeroName(getStoryTitle(story, contentLangRef.current), childName)}
                         </h2>
                         <p style={{ fontSize: '1.2rem', opacity: 0.9 }}>
-                            {t('Starring:', 'البطل:')} <strong>{childName}</strong> ⭐
+                            {language === 'ar' ? <>البطل: <strong>{childName}</strong> ⭐</> : <>Starring: <strong>{childName}</strong> ⭐</>}
                         </p>
                     </div>
                 </div>
@@ -316,12 +335,24 @@ function AudioPlayer({ childName }) {
                             }} />
                         </div>
                         <p style={{ textAlign: 'center', marginTop: '0.5rem', fontSize: '0.9rem', opacity: 0.8 }}>
-                            {Math.round(progress)}% • {t('Tap the bar to jump', 'اضغط على الشريط للتنقل')}
+                            {language === 'ar'
+                                ? `${Math.round(progress)}% مكتمل • اضغط للتقديم/التأخير`
+                                : `${Math.round(progress)}% complete • Click to seek`}
                         </p>
                     </div>
 
                     {/* Playback Controls */}
-                    <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginBottom: '2rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginBottom: '2rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                        {/* Back button - always visible */}
+                        <button
+                            className="btn btn-secondary"
+                            onClick={handleBackToStories}
+                            style={{ fontSize: '1.1rem', padding: '1rem 1.5rem' }}
+                            title={language === 'ar' ? 'العودة للقصص' : 'Back to Stories'}
+                        >
+                            {language === 'ar' ? '← القصص' : '← Stories'}
+                        </button>
+
                         {!isPlaying && !isPaused && (
                             <button
                                 className="btn btn-primary btn-large"
@@ -329,7 +360,9 @@ function AudioPlayer({ childName }) {
                                 disabled={preparing}
                                 style={{ fontSize: '1.5rem', padding: '1.5rem 3rem' }}
                             >
-                                {preparing ? t('🎙️ Preparing the story…', '🎙️ نجهّز القصة…') : t('▶️ Play Story', '▶️ شغّل القصة')}
+                                {preparing
+                                    ? t('🎙️ Preparing the story…', '🎙️ نجهّز القصة…')
+                                    : t('▶️ Play Story', '▶️ تشغيل القصة')}
                             </button>
                         )}
 
@@ -339,7 +372,7 @@ function AudioPlayer({ childName }) {
                                 onClick={handlePause}
                                 style={{ fontSize: '1.5rem', padding: '1.5rem 3rem' }}
                             >
-                                {t('⏸️ Pause', '⏸️ إيقاف مؤقت')}
+                                {language === 'ar' ? '⏸️ إيقاف مؤقت' : '⏸️ Pause'}
                             </button>
                         )}
 
@@ -349,7 +382,7 @@ function AudioPlayer({ childName }) {
                                 onClick={handlePlay}
                                 style={{ fontSize: '1.5rem', padding: '1.5rem 3rem' }}
                             >
-                                {t('▶️ Resume', '▶️ متابعة')}
+                                {language === 'ar' ? '▶️ استئناف' : '▶️ Resume'}
                             </button>
                         )}
 
@@ -359,7 +392,7 @@ function AudioPlayer({ childName }) {
                                 onClick={handleStop}
                                 style={{ fontSize: '1.2rem', padding: '1.5rem 2rem' }}
                             >
-                                {t('⏹️ Stop', '⏹️ إيقاف')}
+                                {language === 'ar' ? '⏹️ إيقاف' : '⏹️ Stop'}
                             </button>
                         )}
                     </div>
@@ -371,7 +404,7 @@ function AudioPlayer({ childName }) {
                     {/* Speed Control */}
                     <div style={{ marginBottom: '2rem', paddingBottom: '2rem', borderBottom: '1px solid var(--glass-border)' }}>
                         <label style={{ display: 'block', marginBottom: '1rem', textAlign: 'center', fontSize: '1.1rem' }}>
-                            ⚡ Playback Speed
+                            {language === 'ar' ? '⚡ سرعة التشغيل' : '⚡ Playback Speed'}
                         </label>
                         <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                             {[0.5, 0.75, 1, 1.25, 1.5, 2].map(speed => (
@@ -398,7 +431,7 @@ function AudioPlayer({ childName }) {
                     {/* Music Volume Control */}
                     <div style={{ marginTop: '2rem', paddingTop: '2rem', borderTop: '1px solid var(--glass-border)' }}>
                         <label style={{ display: 'block', marginBottom: '1rem', textAlign: 'center', fontSize: '1.1rem' }}>
-                            🎵 Background Music Volume
+                            {language === 'ar' ? '🎵 صوت موسيقى الخلفية' : '🎵 Background Music Volume'}
                         </label>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                             <span>🔇</span>
@@ -433,7 +466,9 @@ function AudioPlayer({ childName }) {
 
                 {/* Story Text Preview */}
                 <div className="glass-card">
-                    <h3 style={{ marginBottom: '1rem', textAlign: 'center' }}>Story Preview</h3>
+                    <h3 style={{ marginBottom: '1rem', textAlign: 'center' }}>
+                        {language === 'ar' ? 'معاينة القصة' : 'Story Preview'}
+                    </h3>
                     <div style={{
                         maxHeight: '300px',
                         overflowY: 'auto',
@@ -450,24 +485,22 @@ function AudioPlayer({ childName }) {
                 </div>
 
                 {/* Navigation */}
-                <div style={{ marginTop: '3rem', textAlign: 'center', display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+                <div style={{ marginTop: '3rem', textAlign: 'center' }}>
+                    <button
+                        className="btn btn-secondary"
+                        onClick={handleBackToStories}
+                    >
+                        {language === 'ar' ? '← العودة للقصص' : '← Back to Stories'}
+                    </button>
                     <button
                         className="btn btn-primary"
+                        style={{ marginInlineStart: '1rem' }}
                         onClick={() => {
                             stopEverything();
                             navigate(`/print/${storyId}`);
                         }}
                     >
                         {t('🖨️ Printable book', '🖨️ كتاب للطباعة')}
-                    </button>
-                    <button
-                        className="btn btn-secondary"
-                        onClick={() => {
-                            stopEverything();
-                            navigate(-1);
-                        }}
-                    >
-                        {t('← Back to Stories', '→ العودة للقصص')}
                     </button>
                 </div>
             </div>

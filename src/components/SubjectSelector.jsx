@@ -5,6 +5,7 @@ import { getAllSubjects } from '../services/storyService';
 function SubjectSelector({ childName }) {
     const [subjects, setSubjects] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [language, setLanguage] = useState(localStorage.getItem('language') || 'en');
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -41,40 +42,33 @@ function SubjectSelector({ childName }) {
 
     return (
         <div className="page">
-            {/* Background Stars */}
-            <div className="stars">
-                {[...Array(50)].map((_, i) => (
-                    <div
-                        key={i}
-                        className="star"
-                        style={{
-                            left: `${Math.random() * 100}%`,
-                            top: `${Math.random() * 100}%`,
-                            animationDelay: `${Math.random() * 3}s`
-                        }}
-                    />
-                ))}
-            </div>
+
 
             <div className="container" style={{ position: 'relative', zIndex: 1 }}>
                 <div className="page-header">
                     <h1 className="page-title">
-                        Hello, {childName}! 👋
+                        {language === 'ar' ? `أهلاً يا ${childName}! 👋` : `Hello, ${childName}! 👋`}
                     </h1>
                     <p className="page-subtitle">
-                        Choose what kind of adventure you want today
+                        {language === 'ar' ? 'اختر نوع المغامرة التي تريدها اليوم' : 'Choose what kind of adventure you want today'}
                     </p>
                 </div>
 
                 {subjects.length === 0 ? (
                     <div className="glass-card text-center">
-                        <h3 style={{ marginBottom: '1rem' }}>📚 No Stories Yet!</h3>
-                        <p>Ask an admin to add some exciting story subjects!</p>
+                        <h3 style={{ marginBottom: '1rem' }}>
+                            {language === 'ar' ? '📚 لا توجد قصص بعد!' : '📚 No Stories Yet!'}
+                        </h3>
+                        <p>
+                            {language === 'ar'
+                                ? 'اطلب من المسؤول إضافة بعض مواضيع القصص المثيرة!'
+                                : 'Ask an admin to add some exciting story subjects!'}
+                        </p>
                         <button
                             className="btn btn-primary mt-3"
                             onClick={() => navigate('/')}
                         >
-                            Go Back
+                            {language === 'ar' ? 'العودة' : 'Go Back'}
                         </button>
                     </div>
                 ) : (
@@ -98,7 +92,7 @@ function SubjectSelector({ childName }) {
                         className="btn btn-secondary"
                         onClick={() => navigate('/')}
                     >
-                        ← Change Name
+                        {language === 'ar' ? '← تغيير الاسم' : '← Change Name'}
                     </button>
                 </div>
             </div>

@@ -1,57 +1,58 @@
-// Kessa service worker
-// - Pages: network first, fall back to the cached app shell when offline
-// - Built assets (/assets/*, hashed by Vite) and music: cache first
-// - Firebase / Google APIs are never cached here
-const CACHE_NAME = 'kessa-v2';
-const APP_SHELL = ['/', '/index.html', '/manifest.json', '/music/calm-night.mp3'];
+const CACHE_NAME = 'mama-tales-v4';
 
+// Install: skip waiting immediately so new SW takes over right away
 self.addEventListener('install', (event) => {
-    event.waitUntil(
-        caches.open(CACHE_NAME)
-            .then((cache) => cache.addAll(APP_SHELL))
-            .then(() => self.skipWaiting())
-    );
+    console.log('[SW] Installing v4 — skipWaiting');
+    self.skipWaiting();
 });
 
+// Activate: delete ALL old caches, then claim all clients immediately
 self.addEventListener('activate', (event) => {
+    console.log('[SW] Activating v4 — claiming clients');
     event.waitUntil(
         caches.keys()
-            .then((names) => Promise.all(names.filter((n) => n !== CACHE_NAME).map((n) => caches.delete(n))))
+            .then((keys) => Promise.all(keys.map((k) => {
+                console.log('[SW] Deleting cache:', k);
+                return caches.delete(k);
+            })))
             .then(() => self.clients.claim())
+            .then(() => {
+                // Tell every open tab to reload so they get fresh JS
+                return self.clients.matchAll({ type: 'window' }).then((clients) => {
+                    clients.forEach((client) => client.navigate(client.url));
+                });
+            })
     );
 });
 
+// Fetch: Network-first for everything.
+// Vite JS/CSS have hashed filenames — no caching needed (they're always fresh).
+// HTML is always fetched from network (SPA routing works via rewrite).
 self.addEventListener('fetch', (event) => {
-    const { request } = event;
-    if (request.method !== 'GET') return;
+    if (event.request.method !== 'GET') return;
 
-    const url = new URL(request.url);
-    if (url.origin !== self.location.origin) return; // Firebase, Google TTS audio, fonts: let the browser handle them
+    const url = new URL(event.request.url);
 
-    // Page navigations: always try the network so users get new versions
-    if (request.mode === 'navigate') {
-        event.respondWith(
-            fetch(request)
-                .then((response) => {
-                    const copy = response.clone();
-                    caches.open(CACHE_NAME).then((cache) => cache.put('/index.html', copy));
-                    return response;
-                })
-                .catch(() => caches.match('/index.html'))
-        );
+    // Skip cross-origin requests (Firebase, Google APIs, fonts, etc.)
+    if (url.origin !== self.location.origin) return;
+
+    // Skip Vite hashed assets — they're immutable by filename, no caching needed
+    if (url.pathname.startsWith('/assets/')) {
+        // Pure network fetch — Vite hashing guarantees freshness
         return;
     }
 
-    // Hashed build files and music never change: cache first
-    if (url.pathname.startsWith('/assets/') || url.pathname.startsWith('/music/')) {
-        event.respondWith(
-            caches.match(request).then((cached) => cached || fetch(request).then((response) => {
+    // For HTML and everything else: network-first, fall back to cache
+    event.respondWith(
+        fetch(event.request)
+            .then((response) => {
+                // Only cache successful same-origin responses
                 if (response.ok) {
-                    const copy = response.clone();
-                    caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+                    const clone = response.clone();
+                    caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
                 }
                 return response;
-            }))
-        );
-    }
+            })
+            .catch(() => caches.match(event.request).then((cached) => cached || caches.match('/index.html')))
+    );
 });

@@ -2,7 +2,7 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { signInAnonymously } from 'firebase/auth';
 import app, { auth } from './firebaseConfig';
 
-const REGION = import.meta.env.VITE_FIREBASE_FUNCTIONS_REGION || 'europe-west1';
+const REGION = import.meta.env.VITE_FIREBASE_FUNCTIONS_REGION || 'us-central1';
 const functions = getFunctions(app, REGION);
 const generateNarration = httpsCallable(functions, 'generateNarration', { timeout: 150000 });
 

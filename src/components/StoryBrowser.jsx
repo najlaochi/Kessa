@@ -7,6 +7,7 @@ function StoryBrowser({ childName }) {
     const [subject, setSubject] = useState(null);
     const [loading, setLoading] = useState(true);
     const { subjectId } = useParams();
+    const [language, setLanguage] = useState(localStorage.getItem('language') || 'en');
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -43,6 +44,7 @@ function StoryBrowser({ childName }) {
         });
 
         setStories(filteredStories);
+        setLanguage(language);
         setLoading(false);
     };
 
@@ -60,6 +62,7 @@ function StoryBrowser({ childName }) {
         navigate(`/play/${storyId}`);
     };
 
+
     if (loading) {
         return (
             <div className="page">
@@ -76,9 +79,9 @@ function StoryBrowser({ childName }) {
         return (
             <div className="page">
                 <div className="glass-card text-center">
-                    <h3>Subject not found!</h3>
+                    <h3>{language === 'ar' ? 'الموضوع غير موجود!' : 'Subject not found!'}</h3>
                     <button className="btn btn-primary mt-3" onClick={() => navigate('/subjects')}>
-                        Go Back
+                        {language === 'ar' ? 'العودة' : 'Go Back'}
                     </button>
                 </div>
             </div>
@@ -87,20 +90,7 @@ function StoryBrowser({ childName }) {
 
     return (
         <div className="page">
-            {/* Background Stars */}
-            <div className="stars">
-                {[...Array(50)].map((_, i) => (
-                    <div
-                        key={i}
-                        className="star"
-                        style={{
-                            left: `${Math.random() * 100}%`,
-                            top: `${Math.random() * 100}%`,
-                            animationDelay: `${Math.random() * 3}s`
-                        }}
-                    />
-                ))}
-            </div>
+
 
             <div className="container" style={{ position: 'relative', zIndex: 1 }}>
                 <div className="page-header">
@@ -114,14 +104,24 @@ function StoryBrowser({ childName }) {
 
                 {stories.length === 0 ? (
                     <div className="glass-card text-center">
-                        <h3 style={{ marginBottom: '1rem' }}>📝 No Stories Yet!</h3>
-                        <p>This subject doesn't have any stories yet.</p>
-                        <p>Check back soon for new adventures!</p>
+                        <h3 style={{ marginBottom: '1rem' }}>
+                            {language === 'ar' ? '📝 لا توجد قصص بعد!' : '📝 No Stories Yet!'}
+                        </h3>
+                        <p>
+                            {language === 'ar'
+                                ? 'هذا الموضوع لا يحتوي على قصص بعد.'
+                                : "This subject doesn't have any stories yet."}
+                        </p>
+                        <p>
+                            {language === 'ar'
+                                ? 'عد قريباً لمغامرات جديدة!'
+                                : 'Check back soon for new adventures!'}
+                        </p>
                         <button
                             className="btn btn-primary mt-3"
                             onClick={() => navigate('/subjects')}
                         >
-                            Choose Another Subject
+                            {language === 'ar' ? 'اختر موضوعاً آخر' : 'Choose Another Subject'}
                         </button>
                     </div>
                 ) : (
@@ -148,7 +148,7 @@ function StoryBrowser({ childName }) {
                                 <h3 className="story-card-title">{getStoryTitle(story)}</h3>
                                 {story.duration && (
                                     <p className="story-card-desc">
-                                        ⏱️ About {story.duration} minutes
+                                        ⏱️ {language === 'ar' ? `حوالي ${story.duration} دقائق` : `About ${story.duration} minutes`}
                                     </p>
                                 )}
                                 <div style={{ marginTop: '1rem' }}>
@@ -159,7 +159,7 @@ function StoryBrowser({ childName }) {
                                         fontSize: '0.9rem',
                                         display: 'inline-block'
                                     }}>
-                                        Listen Now 🎧
+                                        {language === 'ar' ? 'استمع الآن 🎧' : 'Listen Now 🎧'}
                                     </span>
                                 </div>
                             </div>
@@ -172,11 +172,12 @@ function StoryBrowser({ childName }) {
                         className="btn btn-secondary"
                         onClick={() => navigate('/subjects')}
                     >
-                        ← Back to Subjects
+                        {language === 'ar' ? '← العودة للمواضيع' : '← Back to Subjects'}
                     </button>
                 </div>
             </div>
         </div>
+
     );
 }
 
