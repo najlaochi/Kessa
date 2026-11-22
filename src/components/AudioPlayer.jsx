@@ -19,6 +19,10 @@ const MUSIC_URL = '/music/calm-night.mp3';
 // VITE_ENABLE_AI_VOICE=true in .env, so the free plan never waits for it.
 const AI_VOICE_ENABLED = import.meta.env.VITE_ENABLE_AI_VOICE === 'true';
 
+// Kessa is told in the parent's voice: without a recording (or AI voice), the story can't play yet.
+// Set VITE_ALLOW_PHONE_VOICE=true to fall back to the phone's built-in voice instead.
+const PHONE_VOICE_ALLOWED = import.meta.env.VITE_ALLOW_PHONE_VOICE === 'true';
+
 function AudioPlayer({ childName }) {
     const [story, setStory] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -304,6 +308,11 @@ function AudioPlayer({ childName }) {
         );
     }
 
+    const canPlay = hasParentVoice
+        || !!story?.[`narrationUrl_${contentLangRef.current}`]
+        || AI_VOICE_ENABLED
+        || PHONE_VOICE_ALLOWED;
+
     return (
         <div className="page">
 
@@ -339,6 +348,8 @@ function AudioPlayer({ childName }) {
 
                 {/* Audio Player Controls */}
                 <div className="glass-card" style={{ marginBottom: '2rem' }}>
+                    {canPlay ? (
+                        <>
                     {/* Progress Bar */}
                     <div style={{ marginBottom: '2rem' }}>
                         <div
@@ -496,6 +507,31 @@ function AudioPlayer({ childName }) {
                             {Math.round(musicVolume * 100)}%
                         </p>
                     </div>
+
+                        </>
+                    ) : (
+                            <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+                                <p style={{ fontSize: '1.2rem', marginBottom: '0.5rem' }}>
+                                    {t('🎙️ This story is told in your voice.', '🎙️ هذه القصة تُروى بصوتك.')}
+                                </p>
+                                <p style={{ opacity: 0.85, marginBottom: '1.5rem' }}>
+                                    {t(`Record it once, and ${childName} can listen to you every night.`,
+                                        `سجّليها مرة واحدة، وسيسمعك ${childName} كل ليلة.`)}
+                                </p>
+                                <button
+                                    className="btn btn-primary btn-large"
+                                    onClick={() => navigate(`/record/${storyId}`)}
+                                    style={{ fontSize: '1.4rem', padding: '1.3rem 2.5rem' }}
+                                >
+                                    {t('🎙️ Record the story', '🎙️ سجّلي القصة')}
+                                </button>
+                                <div style={{ marginTop: '1.5rem' }}>
+                                    <button className="btn btn-secondary" onClick={handleBackToStories}>
+                                        {language === 'ar' ? '← القصص' : '← Stories'}
+                                    </button>
+                                </div>
+                            </div>
+                    )}
 
                     {/* Calming Animation */}
                     {isPlaying && (
