@@ -25,6 +25,30 @@ export const replaceHeroName = (storyText, childName) => {
         .replace(/{بطل}/g, childName);
 };
 
+/**
+ * Story title / content in the chosen language, with fallbacks for older stories
+ */
+export const getStoryTitle = (story, language = 'en') => {
+    if (!story) return '';
+    if (language === 'ar') return story.title_ar || story.title_en || story.title || '';
+    return story.title_en || story.title || story.title_ar || '';
+};
+
+export const getStoryContent = (story, language = 'en') => {
+    if (!story) return '';
+    if (language === 'ar') return story.content_ar || story.content_en || story.content || '';
+    return story.content_en || story.content || '';
+};
+
+/**
+ * Which language the content returned by getStoryContent is really in
+ * (an Arabic user may get English content when no Arabic version exists)
+ */
+export const getContentLanguage = (story, language = 'en') => {
+    if (language === 'ar' && story?.content_ar) return 'ar';
+    return 'en';
+};
+
 // ==================== SUBJECTS ====================
 
 /**

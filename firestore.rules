@@ -8,6 +8,8 @@ service cloud.firestore {
     }
     match /subjects/{id} { allow read: if true; allow write: if isAdmin(); }
     match /stories/{id}  { allow read: if true; allow write: if isAdmin(); }
+    // narrationUsage is only used by the server (daily limits); no app access
+    match /narrationUsage/{id} { allow read, write: if false; }
     match /users/{uid} {
       allow read: if request.auth != null && (request.auth.uid == uid || isAdmin());
       // Nobody can make themselves admin. Set isAdmin = true manually in the Firebase console.

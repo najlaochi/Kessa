@@ -93,7 +93,7 @@ function StoryManager() {
                                 >
                                     <div style={{ flex: 1 }}>
                                         <h4 style={{ color: 'white', marginBottom: '0.5rem', fontSize: '1.2rem' }}>
-                                            {story.title}
+                                            {story.title_en || story.title || story.title_ar || 'Untitled'}
                                         </h4>
                                         <p style={{ opacity: 0.7, fontSize: '0.9rem', marginBottom: '0.5rem' }}>
                                             Subject: <strong>{getSubjectName(story.subjectId)}</strong>
@@ -125,7 +125,7 @@ function StoryManager() {
                                             Edit
                                         </Link>
                                         <button
-                                            onClick={() => handleDelete(story.id, story.title)}
+                                            onClick={() => handleDelete(story.id, story.title_en || story.title || story.title_ar)}
                                             className="btn"
                                             style={{ background: 'var(--error)', color: 'white' }}
                                         >
