@@ -65,7 +65,7 @@ A magical web application where children can hear personalized bedtime stories w
 
 5. **Add calm music file**
    
-   Place a calm music file (MP3) at: `public/music/calm-night.mp3`
+   Place a calm music file (MP3) at: `public/music/calm-night.mp3` (already included)
    
    You can find royalty-free lullaby music from:
    - [FreePD](https://freepd.com/)
@@ -256,3 +256,40 @@ Create magical bedtime stories that make every child the hero of their own adven
   - Arabic: `ذهب {بطل} و{وجد|وجدت} صدفة. {هو|هي} {سعيد|سعيدة}.`
   - English: `{He|She} hugged {his|her} cat.`
   - An empty side is allowed: `سعيد{|ة}`.
+
+
+## 🎙️ Natural voice (Cloud Function)
+
+Stories are read by a natural Google voice instead of the phone's built-in voice.
+The function `generateNarration` (in `functions/`) makes one MP3 per story + child name + language,
+saves it in Storage under `narration/`, and reuses it next time. If it fails, the app falls back to the phone voice.
+
+You can also upload your own recording (MP3) per language in the story editor; it then plays instead of the AI voice.
+
+**One-time setup**
+1. Firebase Console → upgrade the project to the **Blaze** (pay-as-you-go) plan. Set a budget alert in Google Cloud Billing.
+2. Google Cloud Console → APIs & Services → enable **Cloud Text-to-Speech API** for the same project.
+3. Firebase Console → Authentication → Sign-in method → enable **Anonymous**.
+4. Install the Firebase CLI, then from the project folder:
+   ```bash
+   cd functions && npm install && cd ..
+   firebase deploy --only functions,firestore:rules,storage
+   ```
+5. Add `VITE_FIREBASE_FUNCTIONS_REGION=europe-west1` to `.env` (must match `REGION` in `functions/index.js`).
+
+Change the narrator voice in `VOICES` at the top of `functions/index.js`.
+Daily limits (`DAILY_LIMIT_PER_USER`, `DAILY_LIMIT_TOTAL`) protect you from unexpected costs.
+
+## 🖨️ Printable book
+
+Each story has a **Printable book** button. It opens `/print/:storyId`: a cover with the child's name,
+then one page per illustration with the story text shared across the pages. "Print / Save as PDF" uses the
+device's print window, where parents choose *Save as PDF*.
+
+In the admin story editor, upload a **cover image** and **illustrations** (in page order) for each story.
+
+## 🔒 Security notes
+
+- Restrict the Firebase web API key: Google Cloud Console → APIs & Services → Credentials → your Browser key →
+  Application restrictions: *Websites* → add `kessa.fikrjameel.com/*` and your `*.web.app` domain.
+- Edit `src/components/PrivacyPolicy.jsx` (replace the [brackets]) before going public.

@@ -1,19 +1,33 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { getStoryById, replaceHeroName } from '../services/storyService';
+import { getStoryById, replaceHeroName, getStoryTitle, getStoryContent, getContentLanguage } from '../services/storyService';
+import { getNarrationUrl } from '../services/narrationService';
 import audioService from '../services/audioService';
+
+const MUSIC_URL = '/music/calm-night.mp3';
 
 function AudioPlayer({ childName }) {
     const [story, setStory] = useState(null);
     const [loading, setLoading] = useState(true);
     const [isPlaying, setIsPlaying] = useState(false);
     const [isPaused, setIsPaused] = useState(false);
+    const [preparing, setPreparing] = useState(false);
+    const [notice, setNotice] = useState('');
     const [progress, setProgress] = useState(0);
     const [musicVolume, setMusicVolume] = useState(0.3);
-    const [playbackSpeed, setPlaybackSpeed] = useState(1.25);
+    const [playbackSpeed, setPlaybackSpeed] = useState(1);
     const { storyId } = useParams();
     const navigate = useNavigate();
     const storyTextRef = useRef('');
+    const contentLangRef = useRef('en');
+
+    // 'mp3' = natural voice file, 'browser' = the phone's built-in voice (fallback)
+    const modeRef = useRef(null);
+    const narrationRef = useRef(null);
+    const musicRef = useRef(null);
+
+    const uiLanguage = localStorage.getItem('language') || 'en';
+    const t = (en, ar) => (uiLanguage === 'ar' ? ar : en);
 
     const fetchStory = async () => {
         setLoading(true);
@@ -21,30 +35,12 @@ function AudioPlayer({ childName }) {
             const storyData = await getStoryById(storyId);
             if (storyData) {
                 setStory(storyData);
-
-                // Get user's language preference
-                const language = localStorage.getItem('language') || 'en';
-
-                // Get appropriate language content with backward compatibility
-                let storyContent;
-
-                if (language === 'ar') {
-                    // For Arabic: try content_ar, then fallback to content_en, then old content field
-                    storyContent = storyData.content_ar || storyData.content_en || storyData.content || '';
-                } else {
-                    // For English: try content_en, then fallback to old content field
-                    storyContent = storyData.content_en || storyData.content || '';
-                }
-
+                contentLangRef.current = getContentLanguage(storyData, uiLanguage);
+                const storyContent = getStoryContent(storyData, uiLanguage);
                 if (!storyContent) {
                     console.error('No story content found for any language');
-                    setLoading(false);
                     return;
                 }
-
-                console.log('Story content loaded:', storyContent.substring(0, 100) + '...');
-
-                // Replace hero placeholder with child's name
                 storyTextRef.current = replaceHeroName(storyContent, childName);
             }
         } catch (error) {
@@ -54,114 +50,175 @@ function AudioPlayer({ childName }) {
         }
     };
 
+    const stopMp3 = () => {
+        [narrationRef.current, musicRef.current].forEach((el) => {
+            if (el) {
+                el.pause();
+                el.currentTime = 0;
+            }
+        });
+        narrationRef.current = null;
+        musicRef.current = null;
+    };
+
+    const stopEverything = () => {
+        stopMp3();
+        audioService.stop();
+        modeRef.current = null;
+    };
+
     useEffect(() => {
         if (!childName) {
             navigate('/');
             return;
         }
-
         fetchStory();
-
-        // Cleanup on unmount
-        return () => {
-            audioService.stop();
-        };
+        return () => stopEverything();
     }, [storyId, childName, navigate]);
 
-    const handlePlay = () => {
-        if (isPaused) {
-            audioService.resume();
-            setIsPaused(false);
-            setIsPlaying(true);
-        } else {
-            // Start fresh narration
-            audioService.onProgress((charIndex, total) => {
-                const calculatedProgress = (charIndex / total) * 100;
-                setProgress(Math.min(calculatedProgress, 100)); // Cap at 100%
-            });
-
-            audioService.onEnd(() => {
-                setIsPlaying(false);
-                setIsPaused(false);
-                setProgress(0);
-            });
-
-            // Use the calm music from public folder
-            const musicUrl = '/music/backgroundmusicforvideos-sleeping-music-calm-healing-relaxation-background-intro-theme-304096 (1).mp3';
-            const language = localStorage.getItem('language') || 'en';
-
-            // Detect mobile device type
-            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-            const isAndroid = /Android/.test(navigator.userAgent);
-
-            // iOS Safari has very limited Web Speech API support
-            if (isIOS) {
-                alert(language === 'ar'
-                    ? 'تنبيه: متصفح Safari لديه دعم محدود للصوت. للحصول على أفضل تجربة، استخدم Chrome أو قم بتثبيت التطبيق.'
-                    : 'Note: Safari has limited voice support. For best experience, use Chrome browser or install the app.');
-            }
-
-            // Language-specific voice tuning - warm, human-like lady voices
-            let voiceSettings;
-            if (language === 'ar') {
-                // Arabic: Warm, natural, human-like female voice
-                voiceSettings = {
-                    rate: isAndroid ? 0.90 : 0.83,   // Slower, warmer pace for storytelling
-                    pitch: 1.08,  // Slightly higher pitch for warmer female voice
-                    volume: 1.0,
-                    musicVolume: musicVolume,
-                    language: language
-                };
-            } else {
-                // English: Warm, natural, human-like lady voice
-                voiceSettings = {
-                    rate: isAndroid ? 0.85 : 0.78,   // Slower for warmth and clarity
-                    pitch: 1.10,  // Higher pitch for gentle, warm, comforting female voice
-                    volume: 1.0,  // Clear, comforting volume
-                    musicVolume: musicVolume,
-                    language: language
-                };
-            }
-
-            audioService.narrateExpressive(storyTextRef.current, musicUrl, voiceSettings);
-
-            setIsPlaying(true);
-            setIsPaused(false);
-        }
-    };
-
-    const handlePause = () => {
-        audioService.pause();
-        setIsPaused(true);
-        setIsPlaying(false);
-    };
-
-    const handleStop = () => {
-        audioService.stop();
+    const resetState = () => {
         setIsPlaying(false);
         setIsPaused(false);
         setProgress(0);
     };
 
+    /** Play an MP3 narration with the background music underneath. */
+    const playMp3 = async (url, music) => {
+        const narration = new Audio(url);
+        narration.preload = 'auto';
+        narration.playbackRate = playbackSpeed;
+        narration.addEventListener('timeupdate', () => {
+            if (narration.duration) setProgress((narration.currentTime / narration.duration) * 100);
+        });
+        narration.addEventListener('ended', () => {
+            stopMp3();
+            modeRef.current = null;
+            resetState();
+        });
+        narrationRef.current = narration;
+        musicRef.current = music;
+        modeRef.current = 'mp3';
+
+        try {
+            await narration.play();
+        } catch (error) {
+            // Some phones block sound that starts after a wait: ask for one more tap
+            if (error.name === 'NotAllowedError') {
+                music.pause();
+                setIsPaused(true);
+                setIsPlaying(false);
+                setNotice(t('Ready! Tap Resume to listen.', 'جاهزة! اضغط "متابعة" للاستماع.'));
+                return;
+            }
+            throw error;
+        }
+        setIsPlaying(true);
+        setIsPaused(false);
+    };
+
+    /** The old way: the phone's own voice. Used only if the natural voice is not available. */
+    const playWithBrowserVoice = () => {
+        audioService.onProgress((charIndex, total) => {
+            setProgress(Math.min((charIndex / total) * 100, 100));
+        });
+        audioService.onEnd(() => {
+            modeRef.current = null;
+            resetState();
+        });
+
+        const language = contentLangRef.current;
+        const isAndroid = /Android/.test(navigator.userAgent);
+        const voiceSettings = language === 'ar'
+            ? { rate: isAndroid ? 0.90 : 0.83, pitch: 1.08, volume: 1.0, musicVolume, language }
+            : { rate: isAndroid ? 0.85 : 0.78, pitch: 1.10, volume: 1.0, musicVolume, language };
+
+        modeRef.current = 'browser';
+        audioService.setSpeed(playbackSpeed);
+        audioService.narrateExpressive(storyTextRef.current, MUSIC_URL, voiceSettings);
+        setIsPlaying(true);
+        setIsPaused(false);
+    };
+
+    const handlePlay = async () => {
+        setNotice('');
+
+        if (isPaused) {
+            if (modeRef.current === 'mp3') {
+                narrationRef.current?.play();
+                musicRef.current?.play().catch(() => {});
+            } else {
+                audioService.resume();
+            }
+            setIsPaused(false);
+            setIsPlaying(true);
+            return;
+        }
+
+        // Start the music straight away, inside the tap, so phones allow the sound
+        const music = new Audio(MUSIC_URL);
+        music.loop = true;
+        music.volume = musicVolume;
+        music.play().catch(() => {});
+
+        const language = contentLangRef.current;
+        const ownRecording = story?.[`narrationUrl_${language}`];
+
+        setPreparing(true);
+        try {
+            const url = ownRecording || await getNarrationUrl(storyId, childName, language);
+            await playMp3(url, music);
+        } catch (error) {
+            console.warn('Natural voice not available, using the device voice:', error);
+            music.pause();
+            setNotice(t(
+                'The natural voice is not available right now, so the phone voice is used.',
+                'الصوت الطبيعي غير متاح الآن، لذلك نستخدم صوت الهاتف.'
+            ));
+            playWithBrowserVoice();
+        } finally {
+            setPreparing(false);
+        }
+    };
+
+    const handlePause = () => {
+        if (modeRef.current === 'mp3') {
+            narrationRef.current?.pause();
+            musicRef.current?.pause();
+        } else {
+            audioService.pause();
+        }
+        setIsPaused(true);
+        setIsPlaying(false);
+    };
+
+    const handleStop = () => {
+        stopEverything();
+        resetState();
+    };
+
     const handleMusicVolumeChange = (e) => {
         const volume = parseFloat(e.target.value);
         setMusicVolume(volume);
+        if (musicRef.current) musicRef.current.volume = volume;
         audioService.setMusicVolume(volume);
     };
 
     const handleSpeedChange = (speed) => {
         setPlaybackSpeed(speed);
-        audioService.setSpeed(speed);
-        console.log(`Speed changed to ${speed}x`);
+        if (narrationRef.current) narrationRef.current.playbackRate = speed;
+        if (modeRef.current === 'browser') audioService.setSpeed(speed);
     };
 
     const handleProgressBarClick = (e) => {
-        const progressBar = e.currentTarget;
-        const rect = progressBar.getBoundingClientRect();
-        const clickX = e.clientX - rect.left;
-        const percentage = Math.max(0, Math.min(100, (clickX / rect.width) * 100));
-        console.log('Seeking to:', percentage.toFixed(1) + '%');
-        audioService.seekToProgress(percentage);
+        const rect = e.currentTarget.getBoundingClientRect();
+        const percentage = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+        const narration = narrationRef.current;
+        if (modeRef.current === 'mp3' && narration?.duration) {
+            narration.currentTime = (percentage / 100) * narration.duration;
+            setProgress(percentage);
+        } else if (modeRef.current === 'browser') {
+            audioService.seekToProgress(percentage);
+        }
     };
 
     if (loading) {
@@ -216,7 +273,7 @@ function AudioPlayer({ childName }) {
                         {story.thumbnailUrl && (
                             <img
                                 src={story.thumbnailUrl}
-                                alt={story.title}
+                                alt={getStoryTitle(story, contentLangRef.current)}
                                 style={{
                                     width: '100%',
                                     maxHeight: '300px',
@@ -227,10 +284,10 @@ function AudioPlayer({ childName }) {
                             />
                         )}
                         <h2 style={{ fontSize: '2.5rem', marginBottom: '0.5rem', color: 'white' }}>
-                            {story.title}
+                            {replaceHeroName(getStoryTitle(story, contentLangRef.current), childName)}
                         </h2>
                         <p style={{ fontSize: '1.2rem', opacity: 0.9 }}>
-                            Starring: <strong>{childName}</strong> ⭐
+                            {t('Starring:', 'البطل:')} <strong>{childName}</strong> ⭐
                         </p>
                     </div>
                 </div>
@@ -259,7 +316,7 @@ function AudioPlayer({ childName }) {
                             }} />
                         </div>
                         <p style={{ textAlign: 'center', marginTop: '0.5rem', fontSize: '0.9rem', opacity: 0.8 }}>
-                            {Math.round(progress)}% complete • Click to seek
+                            {Math.round(progress)}% • {t('Tap the bar to jump', 'اضغط على الشريط للتنقل')}
                         </p>
                     </div>
 
@@ -269,9 +326,10 @@ function AudioPlayer({ childName }) {
                             <button
                                 className="btn btn-primary btn-large"
                                 onClick={handlePlay}
+                                disabled={preparing}
                                 style={{ fontSize: '1.5rem', padding: '1.5rem 3rem' }}
                             >
-                                ▶️ Play Story
+                                {preparing ? t('🎙️ Preparing the story…', '🎙️ نجهّز القصة…') : t('▶️ Play Story', '▶️ شغّل القصة')}
                             </button>
                         )}
 
@@ -281,7 +339,7 @@ function AudioPlayer({ childName }) {
                                 onClick={handlePause}
                                 style={{ fontSize: '1.5rem', padding: '1.5rem 3rem' }}
                             >
-                                ⏸️ Pause
+                                {t('⏸️ Pause', '⏸️ إيقاف مؤقت')}
                             </button>
                         )}
 
@@ -291,7 +349,7 @@ function AudioPlayer({ childName }) {
                                 onClick={handlePlay}
                                 style={{ fontSize: '1.5rem', padding: '1.5rem 3rem' }}
                             >
-                                ▶️ Resume
+                                {t('▶️ Resume', '▶️ متابعة')}
                             </button>
                         )}
 
@@ -301,10 +359,14 @@ function AudioPlayer({ childName }) {
                                 onClick={handleStop}
                                 style={{ fontSize: '1.2rem', padding: '1.5rem 2rem' }}
                             >
-                                ⏹️ Stop
+                                {t('⏹️ Stop', '⏹️ إيقاف')}
                             </button>
                         )}
                     </div>
+
+                    {notice && (
+                        <p style={{ textAlign: 'center', marginBottom: '1.5rem', opacity: 0.85 }}>{notice}</p>
+                    )}
 
                     {/* Speed Control */}
                     <div style={{ marginBottom: '2rem', paddingBottom: '2rem', borderBottom: '1px solid var(--glass-border)' }}>
@@ -388,15 +450,24 @@ function AudioPlayer({ childName }) {
                 </div>
 
                 {/* Navigation */}
-                <div style={{ marginTop: '3rem', textAlign: 'center' }}>
+                <div style={{ marginTop: '3rem', textAlign: 'center', display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+                    <button
+                        className="btn btn-primary"
+                        onClick={() => {
+                            stopEverything();
+                            navigate(`/print/${storyId}`);
+                        }}
+                    >
+                        {t('🖨️ Printable book', '🖨️ كتاب للطباعة')}
+                    </button>
                     <button
                         className="btn btn-secondary"
                         onClick={() => {
-                            audioService.stop();
+                            stopEverything();
                             navigate(-1);
                         }}
                     >
-                        ← Back to Stories
+                        {t('← Back to Stories', '→ العودة للقصص')}
                     </button>
                 </div>
             </div>

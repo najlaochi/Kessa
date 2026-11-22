@@ -154,6 +154,10 @@ function WelcomePage({ onNameSubmit }) {
                     >
                         {language === 'ar' ? 'تسجيل دخول المسؤول' : 'Admin Login'}
                     </a>
+                    <span style={{ color: 'rgba(255, 255, 255, 0.3)', margin: '0 0.75rem' }}>•</span>
+                    <a href="/privacy" style={{ color: 'rgba(255, 255, 255, 0.5)', textDecoration: 'none', fontSize: '0.85rem' }}>
+                        {language === 'ar' ? 'سياسة الخصوصية' : 'Privacy Policy'}
+                    </a>
                 </div>
             </div>
         </div>

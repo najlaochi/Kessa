@@ -4,6 +4,8 @@ import WelcomePage from './components/WelcomePage';
 import SubjectSelector from './components/SubjectSelector';
 import StoryBrowser from './components/StoryBrowser';
 import AudioPlayer from './components/AudioPlayer';
+import PrintableStory from './components/PrintableStory';
+import PrivacyPolicy from './components/PrivacyPolicy';
 import AdminLogin from './components/admin/AdminLogin';
 import AdminDashboard from './components/admin/AdminDashboard';
 import SubjectManager from './components/admin/SubjectManager';
@@ -59,6 +61,8 @@ function App() {
                 <Route path="/subjects" element={<SubjectSelector childName={childName} />} />
                 <Route path="/stories/:subjectId" element={<StoryBrowser childName={childName} />} />
                 <Route path="/play/:storyId" element={<AudioPlayer childName={childName} />} />
+                <Route path="/print/:storyId" element={<PrintableStory childName={childName} />} />
+                <Route path="/privacy" element={<PrivacyPolicy />} />
 
                 {/* Admin Routes */}
                 <Route path="/admin/login" element={<AdminLogin />} />

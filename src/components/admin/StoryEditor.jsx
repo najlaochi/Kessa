@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { getAllSubjects, addStory, getStoryById, updateStory, replaceHeroName } from '../../services/storyService';
+import { uploadStoryFile } from '../../services/uploadService';
 
 function StoryEditor() {
     const [subjects, setSubjects] = useState([]);
@@ -10,8 +11,13 @@ function StoryEditor() {
         content_en: '',
         content_ar: '',
         subjectId: '',
-        duration: 5
+        duration: 5,
+        thumbnailUrl: '',
+        illustrations: [],
+        narrationUrl_en: '',
+        narrationUrl_ar: ''
     });
+    const [uploading, setUploading] = useState('');
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [previewName, setPreviewName] = useState('Alex');
@@ -40,12 +46,52 @@ function StoryEditor() {
                     content_en: storyData.content_en || storyData.content || '',
                     content_ar: storyData.content_ar || '',
                     subjectId: storyData.subjectId,
-                    duration: storyData.duration || 5
+                    duration: storyData.duration || 5,
+                    thumbnailUrl: storyData.thumbnailUrl || '',
+                    illustrations: storyData.illustrations || [],
+                    narrationUrl_en: storyData.narrationUrl_en || '',
+                    narrationUrl_ar: storyData.narrationUrl_ar || ''
                 });
             }
         }
 
         setLoading(false);
+    };
+
+    const handleUpload = async (files, field) => {
+        if (!files || files.length === 0) return;
+        setUploading(field);
+        try {
+            if (field === 'illustrations') {
+                const urls = [];
+                for (const file of Array.from(files)) {
+                    urls.push(await uploadStoryFile(file, 'images'));
+                }
+                setStory((prev) => ({ ...prev, illustrations: [...(prev.illustrations || []), ...urls] }));
+            } else {
+                const kind = field.startsWith('narration') ? 'narration' : 'images';
+                const url = await uploadStoryFile(files[0], kind);
+                setStory((prev) => ({ ...prev, [field]: url }));
+            }
+        } catch (error) {
+            alert('Upload failed: ' + error.message);
+        } finally {
+            setUploading('');
+        }
+    };
+
+    const moveIllustration = (index, direction) => {
+        setStory((prev) => {
+            const list = [...prev.illustrations];
+            const target = index + direction;
+            if (target < 0 || target >= list.length) return prev;
+            [list[index], list[target]] = [list[target], list[index]];
+            return { ...prev, illustrations: list };
+        });
+    };
+
+    const removeIllustration = (index) => {
+        setStory((prev) => ({ ...prev, illustrations: prev.illustrations.filter((_, i) => i !== index) }));
     };
 
     const handleSubmit = async (e) => {
@@ -152,6 +198,45 @@ function StoryEditor() {
                             />
                         </div>
 
+
+                        {/* Pictures for the printable book */}
+                        <div className="form-group">
+                            <label className="form-label">Cover image</label>
+                            {story.thumbnailUrl && (
+                                <div style={{ marginBottom: '0.5rem' }}>
+                                    <img src={story.thumbnailUrl} alt="Cover" style={{ maxWidth: '200px', borderRadius: '8px', display: 'block' }} />
+                                    <button type="button" className="btn" style={{ marginTop: '0.5rem', background: 'rgba(255,255,255,0.1)' }}
+                                        onClick={() => setStory({ ...story, thumbnailUrl: '' })}>Remove cover</button>
+                                </div>
+                            )}
+                            <input type="file" accept="image/*" disabled={!!uploading}
+                                onChange={(e) => handleUpload(e.target.files, 'thumbnailUrl')} />
+                            {uploading === 'thumbnailUrl' && <p style={{ opacity: 0.7 }}>Uploading…</p>}
+                        </div>
+
+                        <div className="form-group">
+                            <label className="form-label">Illustrations for the printable book (in page order)</label>
+                            <p style={{ fontSize: '0.85rem', opacity: 0.7, marginBottom: '0.5rem' }}>
+                                The story text is shared out evenly across these pictures, one picture per page.
+                            </p>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '0.5rem' }}>
+                                {(story.illustrations || []).map((url, index) => (
+                                    <div key={url} style={{ width: '120px', textAlign: 'center' }}>
+                                        <img src={url} alt={`Page ${index + 1}`} style={{ width: '120px', height: '90px', objectFit: 'cover', borderRadius: '6px' }} />
+                                        <div style={{ fontSize: '0.8rem', opacity: 0.8 }}>Page {index + 1}</div>
+                                        <div style={{ display: 'flex', justifyContent: 'center', gap: '0.25rem' }}>
+                                            <button type="button" onClick={() => moveIllustration(index, -1)} aria-label="Move earlier">◀</button>
+                                            <button type="button" onClick={() => moveIllustration(index, 1)} aria-label="Move later">▶</button>
+                                            <button type="button" onClick={() => removeIllustration(index)} aria-label="Remove">✕</button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            <input type="file" accept="image/*" multiple disabled={!!uploading}
+                                onChange={(e) => handleUpload(e.target.files, 'illustrations')} />
+                            {uploading === 'illustrations' && <p style={{ opacity: 0.7 }}>Uploading…</p>}
+                        </div>
+
                         {/* Language Tabs */}
                         <div style={{ marginBottom: '1.5rem', borderBottom: '2px solid rgba(255, 255, 255, 0.1)' }}>
                             <div style={{ display: 'flex', gap: '1rem' }}>
@@ -223,6 +308,24 @@ function StoryEditor() {
                                         Word count: {story.content_en.split(/\s+/).filter(w => w).length}
                                     </p>
                                 </div>
+
+                                <div className="form-group">
+                                    <label className="form-label">Your own English narration (MP3)</label>
+                                    <p style={{ fontSize: '0.85rem', opacity: 0.7, marginBottom: '0.5rem' }}>
+                                        Optional. If you upload an MP3 (for example your own voice), it is played instead of the AI voice.
+                                        A recording can't say each child's name, so write the story without the name placeholder, or leave this empty to use the personalised AI voice.
+                                    </p>
+                                    {story.narrationUrl_en && (
+                                        <div style={{ marginBottom: '0.5rem' }}>
+                                            <audio controls src={story.narrationUrl_en} style={{ width: '100%' }} />
+                                            <button type="button" className="btn" style={{ marginTop: '0.5rem', background: 'rgba(255,255,255,0.1)' }}
+                                                onClick={() => setStory({ ...story, narrationUrl_en: '' })}>Remove recording</button>
+                                        </div>
+                                    )}
+                                    <input type="file" accept="audio/mpeg,audio/mp3,audio/*" disabled={!!uploading}
+                                        onChange={(e) => handleUpload(e.target.files, 'narrationUrl_en')} />
+                                    {uploading === 'narrationUrl_en' && <p style={{ opacity: 0.7 }}>Uploading…</p>}
+                                </div>
                             </>
                         )}
 
@@ -260,11 +363,29 @@ function StoryEditor() {
                                         عدد الكلمات: {story.content_ar.split(/\s+/).filter(w => w).length}
                                     </p>
                                 </div>
+
+                                <div className="form-group">
+                                    <label className="form-label">Your own Arabic narration (MP3) / تسجيل صوتك بالعربية</label>
+                                    <p style={{ fontSize: '0.85rem', opacity: 0.7, marginBottom: '0.5rem' }}>
+                                        Optional. If you upload an MP3 (for example your own voice), it is played instead of the AI voice.
+                                        A recording can't say each child's name, so write the story without the name placeholder, or leave this empty to use the personalised AI voice.
+                                    </p>
+                                    {story.narrationUrl_ar && (
+                                        <div style={{ marginBottom: '0.5rem' }}>
+                                            <audio controls src={story.narrationUrl_ar} style={{ width: '100%' }} />
+                                            <button type="button" className="btn" style={{ marginTop: '0.5rem', background: 'rgba(255,255,255,0.1)' }}
+                                                onClick={() => setStory({ ...story, narrationUrl_ar: '' })}>Remove recording</button>
+                                        </div>
+                                    )}
+                                    <input type="file" accept="audio/mpeg,audio/mp3,audio/*" disabled={!!uploading}
+                                        onChange={(e) => handleUpload(e.target.files, 'narrationUrl_ar')} />
+                                    {uploading === 'narrationUrl_ar' && <p style={{ opacity: 0.7 }}>Uploading…</p>}
+                                </div>
                             </>
                         )}
 
                         <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
-                            <button type="submit" className="btn btn-primary" disabled={saving}>
+                            <button type="submit" className="btn btn-primary" disabled={saving || !!uploading}>
                                 {saving ? 'Saving...' : (isEditing ? '💾 Update Story' : '✨ Create Story')}
                             </button>
                             <button
@@ -297,6 +418,7 @@ function StoryEditor() {
                             />
                         </div>
                         <div
+                            dir={activeTab === 'ar' ? 'rtl' : 'ltr'}
                             style={{
                                 padding: '2rem',
                                 background: 'rgba(0, 0, 0, 0.3)',
@@ -306,8 +428,13 @@ function StoryEditor() {
                                 fontSize: '1.05rem'
                             }}
                         >
-                            <h4 style={{ color: 'white', marginBottom: '1rem' }}>{story.title}</h4>
-                            {replaceHeroName(story.content, previewName || '{HERO}')}
+                            <h4 style={{ color: 'white', marginBottom: '1rem' }}>
+                                {activeTab === 'ar' ? story.title_ar : story.title_en}
+                            </h4>
+                            {replaceHeroName(
+                                activeTab === 'ar' ? story.content_ar : story.content_en,
+                                previewName || (activeTab === 'ar' ? '{بطل}' : '{HERO}')
+                            )}
                         </div>
                     </div>
                 )}
