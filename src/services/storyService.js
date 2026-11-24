@@ -30,16 +30,41 @@ export const replaceHeroName = (storyText, childName) => {
 /**
  * Story title / content in the chosen language, with fallbacks for older stories
  */
-export const getStoryTitle = (story, language = 'en') => {
+/** 'boy' or 'girl', chosen on the welcome page (Arabic stories have a girl version) */
+export const getChildGender = () => (localStorage.getItem('childGender') === 'girl' ? 'girl' : 'boy');
+
+export const getStoryTitle = (story, language = 'en', gender = getChildGender()) => {
     if (!story) return '';
-    if (language === 'ar') return story.title_ar || story.title_en || story.title || '';
+    if (language === 'ar') {
+        if (gender === 'girl' && story.title_ar_girl) return story.title_ar_girl;
+        return story.title_ar || story.title_en || story.title || '';
+    }
     return story.title_en || story.title || story.title_ar || '';
 };
 
-export const getStoryContent = (story, language = 'en') => {
+export const getStoryContent = (story, language = 'en', gender = getChildGender()) => {
     if (!story) return '';
-    if (language === 'ar') return story.content_ar || story.content_en || story.content || '';
+    if (language === 'ar') {
+        if (gender === 'girl' && story.content_ar_girl) return story.content_ar_girl;
+        return story.content_ar || story.content_en || story.content || '';
+    }
     return story.content_en || story.content || '';
+};
+
+/** Which version of the story is shown: 'ar_girl', 'ar' or 'en' (used to keep recordings apart) */
+export const getVersionKey = (story, language = 'en', gender = getChildGender()) =>
+    (language === 'ar' && gender === 'girl' && story?.content_ar_girl ? 'ar_girl' : language);
+
+/**
+ * Key of the "Kessa voice" recording (uploaded or recorded in admin) for this language and child.
+ * Arabic girls get narrationUrl_ar_girl when it exists, otherwise the boy version.
+ */
+export const getKessaNarrationUrl = (story, language = 'en', gender = getChildGender()) => {
+    if (!story) return '';
+    if (language === 'ar' && gender === 'girl' && story.content_ar_girl) {
+        return story.narrationUrl_ar_girl || '';
+    }
+    return story[`narrationUrl_${language}`] || '';
 };
 
 /**

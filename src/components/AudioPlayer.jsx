@@ -7,7 +7,9 @@ import {
     getStoryContent,
     getContentLanguage,
     hasFreeStoriesConfigured,
-    isStoryOpen
+    isStoryOpen,
+    getVersionKey,
+    getKessaNarrationUrl
 } from '../services/storyService';
 import { getNarrationUrl } from '../services/narrationService';
 import { getRecording } from '../services/recordingStore';
@@ -39,6 +41,8 @@ function AudioPlayer({ childName }) {
     const contentLangRef = useRef('en');
     const parentVoiceUrlRef = useRef('');
     const [hasParentVoice, setHasParentVoice] = useState(false);
+    // When both exist, the family picks: their own recording or the Kessa voice from admin
+    const [voiceChoice, setVoiceChoice] = useState('parent');
 
     // 'mp3' = natural voice file, 'browser' = the phone's built-in voice (fallback)
     const modeRef = useRef(null);
@@ -62,7 +66,7 @@ function AudioPlayer({ childName }) {
                 contentLangRef.current = getContentLanguage(storyData, uiLanguage);
 
                 // A recording the parent made on this device comes first
-                const saved = await getRecording(storyId, contentLangRef.current);
+                const saved = await getRecording(storyId, getVersionKey(storyData, contentLangRef.current));
                 if (saved?.blob) {
                     parentVoiceUrlRef.current = URL.createObjectURL(saved.blob);
                     setHasParentVoice(true);
@@ -204,7 +208,10 @@ function AudioPlayer({ childName }) {
         music.play().catch(() => {});
 
         const language = contentLangRef.current;
-        const ownRecording = parentVoiceUrlRef.current || story?.[`narrationUrl_${language}`];
+        const kessaVoice = getKessaNarrationUrl(story, language);
+        const ownRecording = (voiceChoice === 'kessa' && kessaVoice)
+            ? kessaVoice
+            : (parentVoiceUrlRef.current || kessaVoice);
 
         // Order: 1) the parent's recording on this device  2) the admin's uploaded recording
         //        3) personalised AI voice (if enabled)  4) pre-generated audio  5) the phone's own voice
@@ -308,8 +315,9 @@ function AudioPlayer({ childName }) {
         );
     }
 
+    const hasKessaVoice = !!getKessaNarrationUrl(story, contentLangRef.current);
     const canPlay = hasParentVoice
-        || !!story?.[`narrationUrl_${contentLangRef.current}`]
+        || hasKessaVoice
         || AI_VOICE_ENABLED
         || PHONE_VOICE_ALLOWED;
 
@@ -434,11 +442,34 @@ function AudioPlayer({ childName }) {
                         )}
                     </div>
 
-                    {/* Parent's own voice */}
+                    {/* Parent's own voice, or the Kessa voice */}
                     <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-                        {hasParentVoice && (
+                        {hasParentVoice && hasKessaVoice && !isPlaying && !isPaused && (
+                            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', marginBottom: '1rem', flexWrap: 'wrap' }}>
+                                <button
+                                    className={voiceChoice === 'parent' ? 'btn btn-primary' : 'btn btn-secondary'}
+                                    onClick={() => setVoiceChoice('parent')}
+                                    aria-pressed={voiceChoice === 'parent'}
+                                >
+                                    {t('💜 Your voice', '💜 صوتك')}
+                                </button>
+                                <button
+                                    className={voiceChoice === 'kessa' ? 'btn btn-primary' : 'btn btn-secondary'}
+                                    onClick={() => setVoiceChoice('kessa')}
+                                    aria-pressed={voiceChoice === 'kessa'}
+                                >
+                                    {t('🌙 Kessa voice', '🌙 صوت قصة')}
+                                </button>
+                            </div>
+                        )}
+                        {hasParentVoice && !hasKessaVoice && (
                             <p style={{ marginBottom: '0.75rem', opacity: 0.9 }}>
                                 {t('💜 This story plays in your voice', '💜 هذه القصة تُروى بصوتك')}
+                            </p>
+                        )}
+                        {!hasParentVoice && hasKessaVoice && (
+                            <p style={{ marginBottom: '0.75rem', opacity: 0.9 }}>
+                                {t('🌙 Told by the Kessa voice — or record it in yours', '🌙 بصوت قصة — أو سجّليها بصوتك')}
                             </p>
                         )}
                         <button

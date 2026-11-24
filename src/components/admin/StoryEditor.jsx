@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { getAllSubjects, addStory, getStoryById, updateStory, replaceHeroName } from '../../services/storyService';
 import { generateStoryAudio } from '../../services/cloudTtsService';
 import { uploadStoryFile } from '../../services/uploadService';
+import NarrationField from './NarrationField';
 
 function StoryEditor() {
     const { id } = useParams();
@@ -18,7 +19,10 @@ function StoryEditor() {
         thumbnailUrl: '',
         illustrations: [],
         narrationUrl_en: '',
-        narrationUrl_ar: ''
+        narrationUrl_ar: '',
+        title_ar_girl: '',
+        content_ar_girl: '',
+        narrationUrl_ar_girl: ''
     });
     const [uploading, setUploading] = useState('');
     const [loading, setLoading] = useState(true);
@@ -56,7 +60,10 @@ function StoryEditor() {
                     thumbnailUrl: storyData.thumbnailUrl || '',
                     illustrations: storyData.illustrations || [],
                     narrationUrl_en: storyData.narrationUrl_en || '',
-                    narrationUrl_ar: storyData.narrationUrl_ar || ''
+                    narrationUrl_ar: storyData.narrationUrl_ar || '',
+                    title_ar_girl: storyData.title_ar_girl || '',
+                    content_ar_girl: storyData.content_ar_girl || '',
+                    narrationUrl_ar_girl: storyData.narrationUrl_ar_girl || ''
                 });
             }
         }
@@ -339,23 +346,12 @@ function StoryEditor() {
                                     </p>
                                 </div>
 
-                                <div className="form-group">
-                                    <label className="form-label">Your own English narration (MP3)</label>
-                                    <p style={{ fontSize: '0.85rem', opacity: 0.7, marginBottom: '0.5rem' }}>
-                                        Optional. If you upload an MP3 (for example your own voice), it is played instead of the AI voice.
-                                        A recording can't say each child's name, so write the story without the name placeholder, or leave this empty to use the personalised AI voice.
-                                    </p>
-                                    {story.narrationUrl_en && (
-                                        <div style={{ marginBottom: '0.5rem' }}>
-                                            <audio controls src={story.narrationUrl_en} style={{ width: '100%' }} />
-                                            <button type="button" className="btn" style={{ marginTop: '0.5rem', background: 'rgba(255,255,255,0.1)' }}
-                                                onClick={() => setStory({ ...story, narrationUrl_en: '' })}>Remove recording</button>
-                                        </div>
-                                    )}
-                                    <input type="file" accept="audio/mpeg,audio/mp3,audio/*" disabled={!!uploading}
-                                        onChange={(e) => handleUpload(e.target.files, 'narrationUrl_en')} />
-                                    {uploading === 'narrationUrl_en' && <p style={{ opacity: 0.7 }}>Uploading…</p>}
-                                </div>
+                                <NarrationField
+                                    label="🌙 Kessa voice — English"
+                                    url={story.narrationUrl_en}
+                                    onChange={(url) => setStory((prev) => ({ ...prev, narrationUrl_en: url }))}
+                                    nameHint="“our little hero”"
+                                />
                             </>
                         )}
 
@@ -394,23 +390,50 @@ function StoryEditor() {
                                     </p>
                                 </div>
 
-                                <div className="form-group">
-                                    <label className="form-label">Your own Arabic narration (MP3) / تسجيل صوتك بالعربية</label>
-                                    <p style={{ fontSize: '0.85rem', opacity: 0.7, marginBottom: '0.5rem' }}>
-                                        Optional. If you upload an MP3 (for example your own voice), it is played instead of the AI voice.
-                                        A recording can't say each child's name, so write the story without the name placeholder, or leave this empty to use the personalised AI voice.
-                                    </p>
-                                    {story.narrationUrl_ar && (
-                                        <div style={{ marginBottom: '0.5rem' }}>
-                                            <audio controls src={story.narrationUrl_ar} style={{ width: '100%' }} />
-                                            <button type="button" className="btn" style={{ marginTop: '0.5rem', background: 'rgba(255,255,255,0.1)' }}
-                                                onClick={() => setStory({ ...story, narrationUrl_ar: '' })}>Remove recording</button>
-                                        </div>
-                                    )}
-                                    <input type="file" accept="audio/mpeg,audio/mp3,audio/*" disabled={!!uploading}
-                                        onChange={(e) => handleUpload(e.target.files, 'narrationUrl_ar')} />
-                                    {uploading === 'narrationUrl_ar' && <p style={{ opacity: 0.7 }}>Uploading…</p>}
+                                <NarrationField
+                                    label="🌙 Kessa voice — Arabic, boy version / صوت قصة — نسخة الولد"
+                                    url={story.narrationUrl_ar}
+                                    onChange={(url) => setStory((prev) => ({ ...prev, narrationUrl_ar: url }))}
+                                    nameHint="«بطلنا الصغير»"
+                                    dir="rtl"
+                                />
+
+                                <div className="form-group" style={{ marginTop: '2rem' }}>
+                                    <label className="form-label">👧 Girl version — title / عنوان نسخة البنت</label>
+                                    <input
+                                        type="text"
+                                        className="form-input"
+                                        value={story.title_ar_girl}
+                                        onChange={(e) => setStory({ ...story, title_ar_girl: e.target.value })}
+                                        placeholder="اتركيه فارغًا لاستخدام العنوان نفسه"
+                                        style={{ direction: 'rtl', fontFamily: 'var(--font-body)' }}
+                                    />
                                 </div>
+
+                                <div className="form-group">
+                                    <label className="form-label">👧 Girl version — story / نص القصة للبنت</label>
+                                    <p style={{ fontSize: '0.85rem', opacity: 0.75, marginBottom: '0.5rem', direction: 'rtl' }}>
+                                        القصة نفسها بصيغة المؤنث (كانت {'{بطل}'} تحبّ…). إن تُركت فارغة، تُقرأ نسخة الولد للبنات أيضًا.
+                                    </p>
+                                    <textarea
+                                        className="form-textarea"
+                                        value={story.content_ar_girl}
+                                        onChange={(e) => setStory({ ...story, content_ar_girl: e.target.value })}
+                                        rows="15"
+                                        style={{ direction: 'rtl', fontFamily: 'var(--font-body)' }}
+                                    />
+                                    <p style={{ fontSize: '0.85rem', opacity: 0.6, marginTop: '0.5rem', direction: 'rtl' }}>
+                                        عدد الكلمات: {story.content_ar_girl.split(/\s+/).filter(w => w).length}
+                                    </p>
+                                </div>
+
+                                <NarrationField
+                                    label="🌙 Kessa voice — Arabic, girl version / صوت قصة — نسخة البنت"
+                                    url={story.narrationUrl_ar_girl}
+                                    onChange={(url) => setStory((prev) => ({ ...prev, narrationUrl_ar_girl: url }))}
+                                    nameHint="«بطلتنا الصغيرة»"
+                                    dir="rtl"
+                                />
                             </>
                         )}
 
