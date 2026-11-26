@@ -30,41 +30,43 @@ export const replaceHeroName = (storyText, childName) => {
 /**
  * Story title / content in the chosen language, with fallbacks for older stories
  */
-/** 'boy' or 'girl', chosen on the welcome page (Arabic stories have a girl version) */
+/** 'boy' or 'girl', chosen on the welcome page (stories can have a girl version) */
 export const getChildGender = () => (localStorage.getItem('childGender') === 'girl' ? 'girl' : 'boy');
+
+/** True when this story has a girl version in this language (content_ar_girl / content_en_girl) */
+const hasGirlVersion = (story, language) => !!story?.[`content_${language}_girl`]?.trim();
 
 export const getStoryTitle = (story, language = 'en', gender = getChildGender()) => {
     if (!story) return '';
-    if (language === 'ar') {
-        if (gender === 'girl' && story.title_ar_girl) return story.title_ar_girl;
-        return story.title_ar || story.title_en || story.title || '';
+    const lang = language === 'ar' ? 'ar' : 'en';
+    if (gender === 'girl' && hasGirlVersion(story, lang) && story[`title_${lang}_girl`]) {
+        return story[`title_${lang}_girl`];
     }
+    if (lang === 'ar') return story.title_ar || story.title_en || story.title || '';
     return story.title_en || story.title || story.title_ar || '';
 };
 
 export const getStoryContent = (story, language = 'en', gender = getChildGender()) => {
     if (!story) return '';
-    if (language === 'ar') {
-        if (gender === 'girl' && story.content_ar_girl) return story.content_ar_girl;
-        return story.content_ar || story.content_en || story.content || '';
-    }
+    const lang = language === 'ar' ? 'ar' : 'en';
+    if (gender === 'girl' && hasGirlVersion(story, lang)) return story[`content_${lang}_girl`];
+    if (lang === 'ar') return story.content_ar || story.content_en || story.content || '';
     return story.content_en || story.content || '';
 };
 
-/** Which version of the story is shown: 'ar_girl', 'ar' or 'en' (used to keep recordings apart) */
-export const getVersionKey = (story, language = 'en', gender = getChildGender()) =>
-    (language === 'ar' && gender === 'girl' && story?.content_ar_girl ? 'ar_girl' : language);
+/** Which version of the story is shown: 'ar', 'ar_girl', 'en' or 'en_girl' (keeps recordings apart) */
+export const getVersionKey = (story, language = 'en', gender = getChildGender()) => {
+    const lang = language === 'ar' ? 'ar' : 'en';
+    return gender === 'girl' && hasGirlVersion(story, lang) ? `${lang}_girl` : lang;
+};
 
 /**
- * Key of the "Kessa voice" recording (uploaded or recorded in admin) for this language and child.
- * Arabic girls get narrationUrl_ar_girl when it exists, otherwise the boy version.
+ * The "Kessa voice" recording (uploaded or recorded in admin) for the version the child sees.
+ * Girls get narrationUrl_<lang>_girl when the story has a girl version.
  */
 export const getKessaNarrationUrl = (story, language = 'en', gender = getChildGender()) => {
     if (!story) return '';
-    if (language === 'ar' && gender === 'girl' && story.content_ar_girl) {
-        return story.narrationUrl_ar_girl || '';
-    }
-    return story[`narrationUrl_${language}`] || '';
+    return story[`narrationUrl_${getVersionKey(story, language, gender)}`] || '';
 };
 
 /**

@@ -22,7 +22,10 @@ function StoryEditor() {
         narrationUrl_ar: '',
         title_ar_girl: '',
         content_ar_girl: '',
-        narrationUrl_ar_girl: ''
+        narrationUrl_ar_girl: '',
+        title_en_girl: '',
+        content_en_girl: '',
+        narrationUrl_en_girl: ''
     });
     const [uploading, setUploading] = useState('');
     const [loading, setLoading] = useState(true);
@@ -63,7 +66,10 @@ function StoryEditor() {
                     narrationUrl_ar: storyData.narrationUrl_ar || '',
                     title_ar_girl: storyData.title_ar_girl || '',
                     content_ar_girl: storyData.content_ar_girl || '',
-                    narrationUrl_ar_girl: storyData.narrationUrl_ar_girl || ''
+                    narrationUrl_ar_girl: storyData.narrationUrl_ar_girl || '',
+                    title_en_girl: storyData.title_en_girl || '',
+                    content_en_girl: storyData.content_en_girl || '',
+                    narrationUrl_en_girl: storyData.narrationUrl_en_girl || ''
                 });
             }
         }
@@ -350,6 +356,42 @@ function StoryEditor() {
                                     label="🌙 Kessa voice — English"
                                     url={story.narrationUrl_en}
                                     onChange={(url) => setStory((prev) => ({ ...prev, narrationUrl_en: url }))}
+                                    nameHint="“our little hero”"
+                                />
+
+                                <div className="form-group" style={{ marginTop: '2rem' }}>
+                                    <label className="form-label">👧 Girl version — title (optional)</label>
+                                    <input
+                                        type="text"
+                                        className="form-input"
+                                        value={story.title_en_girl}
+                                        onChange={(e) => setStory({ ...story, title_en_girl: e.target.value })}
+                                        placeholder="Leave empty to use the same title"
+                                        style={{ fontFamily: 'var(--font-body)' }}
+                                    />
+                                </div>
+
+                                <div className="form-group">
+                                    <label className="form-label">👧 Girl version — story</label>
+                                    <p style={{ fontSize: '0.85rem', opacity: 0.75, marginBottom: '0.5rem' }}>
+                                        The same story for girls (for example, her friends are girls). Leave empty and girls hear the version above.
+                                    </p>
+                                    <textarea
+                                        className="form-textarea"
+                                        value={story.content_en_girl}
+                                        onChange={(e) => setStory({ ...story, content_en_girl: e.target.value })}
+                                        rows="15"
+                                        style={{ fontFamily: 'var(--font-body)' }}
+                                    />
+                                    <p style={{ fontSize: '0.85rem', opacity: 0.6, marginTop: '0.5rem' }}>
+                                        Word count: {story.content_en_girl.split(/\s+/).filter(w => w).length}
+                                    </p>
+                                </div>
+
+                                <NarrationField
+                                    label="🌙 Kessa voice — English, girl version"
+                                    url={story.narrationUrl_en_girl}
+                                    onChange={(url) => setStory((prev) => ({ ...prev, narrationUrl_en_girl: url }))}
                                     nameHint="“our little hero”"
                                 />
                             </>
