@@ -5,6 +5,7 @@ import QRModal from './QRModal';
 // v4 — share/QR section moved above the form for visibility
 function WelcomePage({ onNameSubmit }) {
     const [childName, setChildName] = useState('');
+    const [gender, setGender] = useState(localStorage.getItem('childGender') || 'boy');
     const [error, setError] = useState('');
     const [language, setLanguage] = useState(localStorage.getItem('language') || 'en');
     const [showQR, setShowQR] = useState(false);
@@ -25,6 +26,7 @@ function WelcomePage({ onNameSubmit }) {
         }
 
         localStorage.setItem('language', language);
+        localStorage.setItem('childGender', gender);
         onNameSubmit(childName.trim());
         navigate('/stories');
     };
@@ -176,6 +178,24 @@ function WelcomePage({ onNameSubmit }) {
                                     {error}
                                 </p>
                             )}
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', marginTop: '0.5rem' }}>
+                            {[
+                                { value: 'boy', label: language === 'ar' ? '👦 ولد' : '👦 Boy' },
+                                { value: 'girl', label: language === 'ar' ? '👧 بنت' : '👧 Girl' }
+                            ].map((option) => (
+                                <button
+                                    key={option.value}
+                                    type="button"
+                                    onClick={() => setGender(option.value)}
+                                    className={gender === option.value ? 'btn btn-primary' : 'btn btn-secondary'}
+                                    style={{ flex: 1, maxWidth: '160px' }}
+                                    aria-pressed={gender === option.value}
+                                >
+                                    {option.label}
+                                </button>
+                            ))}
                         </div>
 
                         <button type="submit" className="btn btn-primary btn-large" style={{ width: '100%', marginTop: '1rem' }}>

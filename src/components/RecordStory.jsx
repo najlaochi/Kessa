@@ -7,7 +7,8 @@ import {
     getContentLanguage,
     replaceHeroName,
     hasFreeStoriesConfigured,
-    isStoryOpen
+    isStoryOpen,
+    getVersionKey
 } from '../services/storyService';
 import { cleanStoryText } from '../utils/textCleaner';
 import { saveRecording, getRecording, deleteRecording, pickMimeType } from '../services/recordingStore';
@@ -40,6 +41,7 @@ function RecordStory({ childName }) {
     const blobRef = useRef(null);
     const timerRef = useRef(null);
     const languageRef = useRef('en');
+    const versionKeyRef = useRef('en');
 
     useEffect(() => {
         if (!childName) {
@@ -53,8 +55,9 @@ function RecordStory({ childName }) {
                 return;
             }
             languageRef.current = getContentLanguage(data, uiLanguage);
+            versionKeyRef.current = getVersionKey(data, languageRef.current);
             setStory(data);
-            setHasSaved(!!(await getRecording(storyId, languageRef.current)));
+            setHasSaved(!!(await getRecording(storyId, versionKeyRef.current)));
             setLoading(false);
         })();
         return () => stopEverything();
@@ -113,7 +116,7 @@ function RecordStory({ childName }) {
 
     const handleSave = async () => {
         try {
-            await saveRecording(storyId, languageRef.current, blobRef.current, childName);
+            await saveRecording(storyId, versionKeyRef.current, blobRef.current, childName);
             setHasSaved(true);
             navigate(`/play/${storyId}`);
         } catch (error) {
@@ -124,7 +127,7 @@ function RecordStory({ childName }) {
 
     const handleDelete = async () => {
         if (!window.confirm(t('Delete your saved recording?', 'حذف تسجيلك المحفوظ؟'))) return;
-        await deleteRecording(storyId, languageRef.current);
+        await deleteRecording(storyId, versionKeyRef.current);
         setHasSaved(false);
     };
 
