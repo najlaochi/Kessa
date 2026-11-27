@@ -7,8 +7,10 @@ import {
     getStoryContent,
     getContentLanguage,
     hasFreeStoriesConfigured,
-    isStoryOpen
+    isStoryOpen,
+    getChildGender
 } from '../services/storyService';
+import { getColoringScenes, coloringUrl } from '../data/coloringPages';
 import { cleanStoryText } from '../utils/textCleaner';
 
 /**
@@ -55,6 +57,9 @@ const PRINT_CSS = `
 .print-page p { font-size: 15pt; line-height: 1.7; margin: 0 0 4mm; }
 .print-page .page-number { margin-top: auto; text-align: center; font-size: 10pt; color: #999; }
 .print-end { justify-content: center; align-items: center; font-size: 2rem; color: #5a3fc0; }
+.print-end img { width: 100%; max-height: 150mm; object-fit: contain; margin-bottom: 8mm; }
+.print-cover .coloring-hint { font-size: 1.1rem; color: #666; margin-top: 1rem; }
+.print-page .illustration.coloring { border: none; }
 @media print {
   @page { size: A4; margin: 0; }
   html, body, #root { background: #fff !important; }
@@ -98,9 +103,20 @@ function PrintableStory({ childName }) {
     const title = replaceHeroName(getStoryTitle(story, language), childName);
     const text = replaceHeroName(cleanStoryText(getStoryContent(story, language)), childName);
     const paragraphs = text.split(/\n+/).map((p) => p.trim()).filter(Boolean);
-    const illustrations = story.illustrations || [];
-    const pageCount = illustrations.length || Math.max(1, Math.ceil(paragraphs.length / 3));
+    const uploaded = story.illustrations || [];
+    const pageCount = uploaded.length || Math.max(1, Math.ceil(paragraphs.length / 3));
     const pages = splitIntoPages(paragraphs, pageCount);
+
+    // No pictures uploaded in admin → coloring pages (the child in them matches boy/girl)
+    const gender = getChildGender();
+    const useColoring = uploaded.length === 0;
+    const [firstScene, secondScene] = getColoringScenes(story.id || storyId);
+    const illustrations = useColoring ? [] : uploaded;
+    if (useColoring) {
+        illustrations[0] = coloringUrl(firstScene, gender);
+        if (pages.length > 2) illustrations[Math.floor(pages.length / 2)] = coloringUrl(secondScene, gender);
+    }
+    const coverImage = story.thumbnailUrl || (useColoring ? coloringUrl('cover', gender) : '');
 
     return (
         <div className="print-book" dir={isArabic ? 'rtl' : 'ltr'} lang={language}>
@@ -122,23 +138,29 @@ function PrintableStory({ childName }) {
 
             {/* Cover */}
             <section className="print-page print-cover">
-                {story.thumbnailUrl && <img src={story.thumbnailUrl} alt="" />}
+                {coverImage && <img src={coverImage} alt="" />}
                 <h1>{title}</h1>
                 <p className="for">
                     {isArabic ? `قصة خاصة بـ ${childName} ⭐` : `A special story for ${childName} ⭐`}
                 </p>
+                {useColoring && (
+                    <p className="coloring-hint">
+                        {isArabic ? (gender === 'girl' ? '🖍️ لوّني الصور بألوانكِ المفضّلة!' : '🖍️ لوّن الصور بألوانك المفضّلة!') : '🖍️ Color the pictures with your favorite colors!'}
+                    </p>
+                )}
             </section>
 
             {/* Story pages */}
             {pages.map((pageParagraphs, index) => (
                 <section className="print-page" key={index}>
-                    {illustrations[index] && <img className="illustration" src={illustrations[index]} alt="" />}
+                    {illustrations[index] && <img className={`illustration${useColoring ? ' coloring' : ''}`} src={illustrations[index]} alt="" />}
                     {pageParagraphs.map((paragraph, i) => <p key={i}>{paragraph}</p>)}
                     <div className="page-number">{index + 1}</div>
                 </section>
             ))}
 
             <section className="print-page print-end">
+                {useColoring && <img src={coloringUrl('night', gender)} alt="" />}
                 {isArabic ? '🌙 النهاية' : '🌙 The End'}
             </section>
         </div>
